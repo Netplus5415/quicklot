@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { Badge, Button, Card, PageContainer } from "@/components/ui";
+import type { BadgeProps } from "@/components/ui";
 
 const GENERIC_ERROR = "Une erreur est survenue, veuillez réessayer.";
 
@@ -22,14 +24,14 @@ interface PurchaseRow {
   seller: { pseudo: string | null; prenom: string | null } | null;
 }
 
-function statutBadge(statut: string | null) {
+function statutBadge(statut: string | null): { label: string; variant: BadgeProps["variant"] } {
   switch (statut) {
-    case "paid":      return { label: "Payée",         bg: "#ffedd5", color: "#c2410c" };
-    case "preparing": return { label: "En préparation", bg: "#dbeafe", color: "#2563eb" };
-    case "shipped":   return { label: "Expédiée",      bg: "#ede9fe", color: "#7c3aed" };
-    case "delivered": return { label: "Livrée",        bg: "#dcfce7", color: "#16a34a" };
-    case "cancelled": return { label: "Annulée",       bg: "#f3f4f6", color: "#6b7280" };
-    default:          return { label: statut ?? "—",   bg: "#f3f4f6", color: "#6b7280" };
+    case "paid":      return { label: "Payée",          variant: "warning" };
+    case "preparing": return { label: "En préparation", variant: "info" };
+    case "shipped":   return { label: "Expédiée",       variant: "info" };
+    case "delivered": return { label: "Livrée",         variant: "success" };
+    case "cancelled": return { label: "Annulée",        variant: "neutral" };
+    default:          return { label: statut ?? "—",    variant: "neutral" };
   }
 }
 
@@ -172,224 +174,202 @@ export default function AcheteurDashboard() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "calc(100vh - 56px)", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#ffffff", fontFamily: "sans-serif" }}>
-        <p style={{ color: "#6b7280" }}>Chargement…</p>
-      </div>
+      <PageContainer background="white" maxWidth="lg">
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <p className="text-sm text-gray-500">Chargement…</p>
+        </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div style={{ backgroundColor: "#f9fafb", minHeight: "calc(100vh - 56px)", padding: "2rem", fontFamily: "sans-serif" }}>
+    <PageContainer background="gray" maxWidth="lg">
       {toast && (
         <div
           role="status"
-          style={{
-            position: "fixed",
-            top: "72px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            backgroundColor: toast.error ? "#fef2f2" : "#f0fdf4",
-            color: toast.error ? "#991b1b" : "#166534",
-            border: `1px solid ${toast.error ? "#fca5a5" : "#86efac"}`,
-            borderRadius: "10px",
-            padding: "0.75rem 1.25rem",
-            fontSize: "0.9rem",
-            fontWeight: 500,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-            maxWidth: "calc(100% - 2rem)",
-          }}
+          className={[
+            "fixed left-1/2 top-[72px] z-50 -translate-x-1/2 rounded-[4px] border px-5 py-3 text-sm font-medium",
+            "max-w-[calc(100%-2rem)]",
+            toast.error
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-green-200 bg-green-50 text-green-800",
+          ].join(" ")}
         >
           {toast.text}
         </div>
       )}
-      <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <Link
-          href="/dashboard"
-          style={{ color: "#6b7280", fontSize: "0.875rem", textDecoration: "none", display: "inline-block", marginBottom: "1.5rem" }}
-        >
-          ← Retour au dashboard
-        </Link>
 
-        <h1 style={{ color: "#111827", fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 0.5rem 0" }}>
-          Mes achats
-        </h1>
-        <p style={{ color: "#6b7280", fontSize: "0.95rem", margin: "0 0 2rem 0" }}>
-          Toutes vos commandes passées sur Quicklot.
-        </p>
+      <Link
+        href="/dashboard"
+        className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-700"
+      >
+        ← Retour au dashboard
+      </Link>
 
-        {purchases.length === 0 ? (
-          <div style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
-            <p style={{ color: "#6b7280", fontSize: "0.95rem", margin: "0 0 1rem 0" }}>
-              Vous n&apos;avez pas encore passé de commande.
-            </p>
-            <Link
-              href="/boutique"
-              style={{ display: "inline-block", backgroundColor: "#FF7D07", color: "#fff", textDecoration: "none", padding: "0.65rem 1.25rem", borderRadius: "8px", fontSize: "0.9rem", fontWeight: "600" }}
-            >
+      <h1 className="mb-2 text-2xl font-bold text-gray-900">Mes achats</h1>
+      <p className="mb-8 text-sm text-gray-500">
+        Toutes vos commandes passées sur Quicklot.
+      </p>
+
+      {purchases.length === 0 ? (
+        <Card padding="lg" className="text-center">
+          <p className="mb-4 text-sm text-gray-500">
+            Vous n&apos;avez pas encore passé de commande.
+          </p>
+          <Link href="/boutique">
+            <Button variant="primary" size="md">
               Découvrir le catalogue
-            </Link>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {purchases.map((order) => {
-              const currentStatut = order.statut;
-              const badge = statutBadge(currentStatut);
-              const sellerName = order.seller?.pseudo || order.seller?.prenom || "Vendeur";
+            </Button>
+          </Link>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {purchases.map((order) => {
+            const currentStatut = order.statut;
+            const badge = statutBadge(currentStatut);
+            const sellerName = order.seller?.pseudo || order.seller?.prenom || "Vendeur";
 
-              const isFba = order.shipping_mode === "amazon";
-              const canUploadLabels = isFba && order.statut !== "delivered";
-              const isUploading = uploadingId === order.id;
+            const isFba = order.shipping_mode === "amazon";
+            const canUploadLabels = isFba && order.statut !== "delivered";
+            const isUploading = uploadingId === order.id;
 
-              return (
-                <div key={order.id} style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1rem", display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-                  {order.listing?.photo_url ? (
-                    <img src={order.listing.photo_url} alt={order.listing.titre} style={{ width: "72px", height: "72px", objectFit: "cover", borderRadius: "8px", flexShrink: 0 }} />
-                  ) : (
-                    <div style={{ width: "72px", height: "72px", backgroundColor: "#f3f4f6", borderRadius: "8px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ color: "#9ca3af", fontSize: "0.65rem" }}>N/A</span>
-                    </div>
-                  )}
-
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <p style={{ color: "#111827", fontSize: "0.95rem", fontWeight: "600", margin: "0 0 0.2rem 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {order.listing?.titre ?? "Listing supprimé"}
-                    </p>
-                    <p style={{ color: "#6b7280", fontSize: "0.8rem", margin: "0 0 0.2rem 0" }}>
-                      Vendu par{" "}
-                      <Link href={`/vendeur/${order.seller_id}`} style={{ color: "#FF7D07", textDecoration: "none", fontWeight: "600" }}>
-                        {sellerName}
-                      </Link>
-                    </p>
-                    <p style={{ color: "#9ca3af", fontSize: "0.75rem", margin: 0 }}>
-                      {formatDate(order.created_at)}
-                    </p>
+            return (
+              <Card key={order.id} padding="sm" className="flex flex-wrap items-center gap-4 p-4">
+                {order.listing?.photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={order.listing.photo_url}
+                    alt={order.listing.titre}
+                    className="h-[72px] w-[72px] flex-shrink-0 rounded-[4px] object-cover"
+                  />
+                ) : (
+                  <div className="flex h-[72px] w-[72px] flex-shrink-0 items-center justify-center rounded-[4px] bg-gray-100">
+                    <span className="text-[0.65rem] text-gray-400">N/A</span>
                   </div>
+                )}
 
-                  <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem" }}>
-                    <p style={{ color: "#111827", fontWeight: "700", fontSize: "1rem", margin: 0 }}>
-                      {(order.amount ?? 0).toFixed(2)} €
-                    </p>
-                    <span style={{ backgroundColor: badge.bg, color: badge.color, fontSize: "0.68rem", fontWeight: "700", padding: "0.2rem 0.55rem", borderRadius: "999px", textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap" }}>
-                      {badge.label}
-                    </span>
-                  </div>
-
-                  <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+                <div className="min-w-[200px] flex-1">
+                  <p className="mb-1 truncate text-sm font-semibold text-gray-900">
+                    {order.listing?.titre ?? "Listing supprimé"}
+                  </p>
+                  <p className="mb-1 text-xs text-gray-500">
+                    Vendu par{" "}
                     <Link
-                      href={`/messages?with=${order.seller_id}`}
-                      style={{ backgroundColor: "#ffffff", color: "#374151", border: "1px solid #d1d5db", borderRadius: "8px", padding: "0.5rem 0.9rem", fontSize: "0.8rem", fontWeight: "600", textDecoration: "none", whiteSpace: "nowrap" }}
+                      href={`/vendeur/${order.seller_id}`}
+                      className="font-semibold text-[#FF7D07] hover:underline"
                     >
-                      Contacter le vendeur
+                      {sellerName}
                     </Link>
-                    <Link
-                      href={`/dashboard/commandes/${order.id}`}
-                      style={{ backgroundColor: "#FF7D07", color: "#ffffff", border: "none", borderRadius: "8px", padding: "0.5rem 0.9rem", fontSize: "0.8rem", fontWeight: "600", textDecoration: "none", whiteSpace: "nowrap" }}
-                    >
-                      Voir détails →
-                    </Link>
-                  </div>
-
-                  {isFba && (
-                    <div style={{ flexBasis: "100%", marginTop: "0.75rem", backgroundColor: "#fff7ed", border: "1px dashed #fed7aa", borderRadius: "8px", padding: "0.85rem 1rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                        <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#9a3412" }}>
-                          📦 Préparation FBA
-                        </span>
-                        {order.etiquettes_url && (
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadLabels(order.etiquettes_url!)}
-                            style={{ backgroundColor: "#ffffff", color: "#9a3412", border: "1px solid #fed7aa", borderRadius: "6px", padding: "0.35rem 0.75rem", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}
-                          >
-                            Voir mes étiquettes
-                          </button>
-                        )}
-                      </div>
-
-                      {canUploadLabels && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                          <label
-                            style={{
-                              backgroundColor: "#ffffff",
-                              color: "#FF7D07",
-                              border: "1px solid #FF7D07",
-                              borderRadius: "6px",
-                              padding: "0.4rem 0.85rem",
-                              fontSize: "0.75rem",
-                              fontWeight: 600,
-                              cursor: isUploading ? "not-allowed" : "pointer",
-                              opacity: isUploading ? 0.6 : 1,
-                            }}
-                          >
-                            Choisir un fichier
-                            <input
-                              type="file"
-                              accept=".pdf,image/jpeg,image/png"
-                              disabled={isUploading}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0] ?? null;
-                                setPendingFiles((prev) => ({ ...prev, [order.id]: file }));
-                                setUploadErrors((prev) => ({ ...prev, [order.id]: null }));
-                                e.target.value = "";
-                              }}
-                              style={{ display: "none" }}
-                            />
-                          </label>
-
-                          {pendingFiles[order.id] && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", backgroundColor: "#ffffff", border: "1px solid #fed7aa", borderRadius: "6px", padding: "0.3rem 0.6rem", fontSize: "0.75rem", color: "#9a3412" }}>
-                              <span style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {pendingFiles[order.id]!.name}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPendingFiles((prev) => ({ ...prev, [order.id]: null }));
-                                  setUploadErrors((prev) => ({ ...prev, [order.id]: null }));
-                                }}
-                                disabled={isUploading}
-                                aria-label="Retirer le fichier"
-                                style={{ background: "none", border: "none", color: "#9a3412", cursor: isUploading ? "not-allowed" : "pointer", fontSize: "0.85rem", lineHeight: 1, padding: 0 }}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => handleUploadLabels(order.id)}
-                            disabled={!pendingFiles[order.id] || isUploading}
-                            style={{
-                              backgroundColor: !pendingFiles[order.id] || isUploading ? "#e5e7eb" : "#FF7D07",
-                              color: !pendingFiles[order.id] || isUploading ? "#9ca3af" : "#ffffff",
-                              border: "none",
-                              borderRadius: "6px",
-                              padding: "0.4rem 0.95rem",
-                              fontSize: "0.75rem",
-                              fontWeight: 600,
-                              cursor: !pendingFiles[order.id] || isUploading ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            {isUploading ? "Envoi…" : "Envoyer"}
-                          </button>
-                        </div>
-                      )}
-
-                      {uploadErrors[order.id] && (
-                        <p style={{ margin: 0, color: "#dc2626", fontSize: "0.75rem" }}>
-                          {uploadErrors[order.id]}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                  </p>
+                  <p className="text-[0.7rem] uppercase tracking-wide text-gray-400">
+                    {formatDate(order.created_at)}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
+
+                <div className="flex flex-shrink-0 flex-col items-end gap-1.5 text-right">
+                  <p className="text-base font-bold text-gray-900">
+                    {(order.amount ?? 0).toFixed(2)} €
+                  </p>
+                  <Badge variant={badge.variant}>{badge.label}</Badge>
+                </div>
+
+                <div className="flex flex-shrink-0 gap-2">
+                  <Link href={`/messages?with=${order.seller_id}`}>
+                    <Button variant="secondary" size="sm">
+                      Contacter le vendeur
+                    </Button>
+                  </Link>
+                  <Link href={`/dashboard/commandes/${order.id}`}>
+                    <Button variant="primary" size="sm">
+                      Voir détails →
+                    </Button>
+                  </Link>
+                </div>
+
+                {isFba && (
+                  <div className="mt-3 flex basis-full flex-col gap-2 rounded-[6px] border border-dashed border-orange-200 bg-orange-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-orange-800">
+                        📦 Préparation FBA
+                      </span>
+                      {order.etiquettes_url && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleDownloadLabels(order.etiquettes_url!)}
+                        >
+                          Voir mes étiquettes
+                        </Button>
+                      )}
+                    </div>
+
+                    {canUploadLabels && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label
+                          className={[
+                            "inline-flex items-center rounded-[4px] border border-[#FF7D07] bg-white px-3 py-1.5 text-[0.7rem] font-semibold text-[#FF7D07]",
+                            isUploading ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-orange-50",
+                          ].join(" ")}
+                        >
+                          Choisir un fichier
+                          <input
+                            type="file"
+                            accept=".pdf,image/jpeg,image/png"
+                            disabled={isUploading}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] ?? null;
+                              setPendingFiles((prev) => ({ ...prev, [order.id]: file }));
+                              setUploadErrors((prev) => ({ ...prev, [order.id]: null }));
+                              e.target.value = "";
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+
+                        {pendingFiles[order.id] && (
+                          <div className="flex items-center gap-1.5 rounded-[4px] border border-orange-200 bg-white px-2 py-1 text-[0.7rem] text-orange-800">
+                            <span className="max-w-[180px] truncate">
+                              {pendingFiles[order.id]!.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPendingFiles((prev) => ({ ...prev, [order.id]: null }));
+                                setUploadErrors((prev) => ({ ...prev, [order.id]: null }));
+                              }}
+                              disabled={isUploading}
+                              aria-label="Retirer le fichier"
+                              className="text-orange-800 disabled:cursor-not-allowed"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
+
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleUploadLabels(order.id)}
+                          disabled={!pendingFiles[order.id] || isUploading}
+                          loading={isUploading}
+                        >
+                          {isUploading ? "Envoi…" : "Envoyer"}
+                        </Button>
+                      </div>
+                    )}
+
+                    {uploadErrors[order.id] && (
+                      <p className="text-xs text-red-600">{uploadErrors[order.id]}</p>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </PageContainer>
   );
 }
