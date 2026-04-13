@@ -100,6 +100,7 @@ export default function CommandeDetail() {
     statut: string;
   } | null>(null);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [showDisputePreModal, setShowDisputePreModal] = useState(false);
   const [disputeRaison, setDisputeRaison] = useState<"non_expedition" | "non_conformite">("non_expedition");
   const [disputeDescription, setDisputeDescription] = useState("");
   const [disputeSubmitting, setDisputeSubmitting] = useState(false);
@@ -465,6 +466,54 @@ export default function CommandeDetail() {
 
   return (
     <div style={{ backgroundColor: "#f9fafb", minHeight: "calc(100vh - 56px)", padding: "2rem", fontFamily: "sans-serif" }}>
+      {showDisputePreModal && order && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowDisputePreModal(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 1002, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: "#ffffff", borderRadius: "12px", padding: "1.5rem", maxWidth: "480px", width: "100%", boxShadow: "0 20px 48px rgba(0,0,0,0.25)" }}
+          >
+            <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.2rem", fontWeight: 600, color: "#111827" }}>
+              Avant d&apos;ouvrir un litige
+            </h3>
+            <p style={{ margin: "0 0 1.25rem 0", fontSize: "0.9rem", color: "#6b7280", lineHeight: 1.6 }}>
+              Avez-vous déjà tenté de résoudre ce problème directement avec le vendeur ? La plupart des problèmes se règlent à l&apos;amiable.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              <Link
+                href={`/messages?with=${order.seller_id}`}
+                onClick={() => setShowDisputePreModal(false)}
+                style={{ backgroundColor: "#FF7D07", color: "#ffffff", border: "none", borderRadius: "8px", padding: "0.7rem 1.2rem", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", textAlign: "center", display: "block" }}
+              >
+                Contacter le vendeur
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDisputePreModal(false);
+                  setDisputeError(null);
+                  setShowDisputeModal(true);
+                }}
+                style={{ backgroundColor: "#ffffff", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "8px", padding: "0.7rem 1.2rem", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" }}
+              >
+                Oui, j&apos;ai déjà contacté le vendeur
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDisputePreModal(false)}
+                style={{ backgroundColor: "transparent", color: "#6b7280", border: "none", padding: "0.55rem 1rem", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDisputeModal && (
         <div
           role="dialog"
@@ -802,16 +851,21 @@ export default function CommandeDetail() {
                   <p style={{ margin: "0 0 0.85rem 0", color: "#374151", fontSize: "0.9rem" }}>
                     Un problème avec cette commande ?
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDisputeError(null);
-                      setShowDisputeModal(true);
-                    }}
-                    style={{ backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "8px", padding: "0.6rem 1.2rem", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
-                  >
-                    ⚠ Ouvrir un litige
-                  </button>
+                  <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                    <Link
+                      href={`/messages?with=${order.seller_id}`}
+                      style={{ backgroundColor: "#ffffff", color: "#374151", border: "1px solid #d1d5db", borderRadius: "8px", padding: "0.6rem 1.2rem", fontSize: "0.85rem", fontWeight: 600, textDecoration: "none", display: "inline-block" }}
+                    >
+                      Contacter le vendeur
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setShowDisputePreModal(true)}
+                      style={{ backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "8px", padding: "0.6rem 1.2rem", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      ⚠ Ouvrir un litige
+                    </button>
+                  </div>
                 </div>
               );
             })()}

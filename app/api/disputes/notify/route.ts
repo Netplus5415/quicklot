@@ -124,6 +124,8 @@ export async function POST(request: NextRequest) {
       (order as { listing?: { titre?: string | null } | null } | null)?.listing?.titre ??
       "—";
     const buyerEmail = (buyer as { email?: string | null } | null)?.email ?? "";
+    const buyerPrenom =
+      (buyer as { prenom?: string | null } | null)?.prenom ?? null;
     const sellerEmail = (seller as { email?: string | null } | null)?.email ?? "";
     const sellerPrenom =
       (seller as { prenom?: string | null } | null)?.prenom ?? null;
@@ -152,7 +154,31 @@ export async function POST(request: NextRequest) {
 
     await sendEmail(ADMIN_EMAIL, adminSubject, adminHtml);
 
-    // 2) Email vendeur
+    // 2) Email acheteur — confirmation
+    if (buyerEmail) {
+      const buyerSubject = "Votre litige a bien été enregistré — Quicklot";
+      const buyerHtml = `
+<div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; color: #111827; padding: 24px;">
+  <h1 style="color: #FF7D07; font-size: 22px; margin: 0 0 16px;">Votre litige a bien été enregistré</h1>
+  <p>Bonjour${buyerPrenom ? ` ${escapeHtml(buyerPrenom)}` : ""},</p>
+  <p>Nous avons bien reçu votre demande concernant votre commande <strong>${escapeHtml(titre)}</strong>.</p>
+  <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
+    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Raison :</strong> ${escapeHtml(raisonLabel)}</p>
+    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Votre description :</strong></p>
+    <div style="background: #ffffff; border-left: 3px solid #FF7D07; padding: 10px 14px; color: #374151; font-size: 14px; white-space: pre-wrap;">${description}</div>
+  </div>
+  <p>L&#39;équipe Quicklot examine actuellement la situation et reviendra vers vous sous 48h.</p>
+  <p>En attendant, si vous avez de nouveaux éléments à nous communiquer, répondez simplement à cet email.</p>
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 16px;" />
+  <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+    Cet email vous a été envoyé par <a href="https://www.quicklot.fr" style="color: #FF7D07; text-decoration: none;">Quicklot</a>, la marketplace du déstockage en France.
+  </p>
+</div>
+      `.trim();
+      await sendEmail(buyerEmail, buyerSubject, buyerHtml);
+    }
+
+    // 3) Email vendeur
     if (sellerEmail) {
       const sellerSubject = "Un litige a été ouvert sur votre commande — Quicklot";
       const sellerHtml = `
