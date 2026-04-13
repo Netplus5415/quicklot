@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { Badge, Button, Card, PageContainer } from "@/components/ui";
+import type { BadgeProps } from "@/components/ui";
 
 interface OrderRow {
   id: string;
@@ -26,14 +28,14 @@ interface OrderRow {
   buyer: { prenom: string | null; pseudo: string | null; email: string; avatar_url: string | null } | null;
 }
 
-function statutBadge(statut: string | null) {
+function statutBadge(statut: string | null): { label: string; variant: BadgeProps["variant"] } {
   switch (statut) {
-    case "paid":      return { label: "Payée",          bg: "#ffedd5", color: "#c2410c" };
-    case "preparing": return { label: "En préparation", bg: "#dbeafe", color: "#2563eb" };
-    case "shipped":   return { label: "Expédiée",       bg: "#ede9fe", color: "#7c3aed" };
-    case "delivered": return { label: "Livrée",         bg: "#dcfce7", color: "#16a34a" };
-    case "cancelled": return { label: "Annulée",        bg: "#f3f4f6", color: "#6b7280" };
-    default:          return { label: statut ?? "—",    bg: "#f3f4f6", color: "#6b7280" };
+    case "paid":      return { label: "Payée",          variant: "warning" };
+    case "preparing": return { label: "En préparation", variant: "info" };
+    case "shipped":   return { label: "Expédiée",       variant: "info" };
+    case "delivered": return { label: "Livrée",         variant: "success" };
+    case "cancelled": return { label: "Annulée",        variant: "neutral" };
+    default:          return { label: statut ?? "—",    variant: "neutral" };
   }
 }
 
@@ -91,90 +93,93 @@ export default function CommandesListe() {
 
   if (loading) {
     return (
-      <div style={{ backgroundColor: "#ffffff", minHeight: "calc(100vh - 56px)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif" }}>
-        <p style={{ color: "#6b7280" }}>Chargement…</p>
-      </div>
+      <PageContainer background="white" maxWidth="lg">
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <p className="text-sm text-gray-500">Chargement…</p>
+        </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div style={{ backgroundColor: "#f9fafb", minHeight: "calc(100vh - 56px)", padding: "2rem", fontFamily: "sans-serif" }}>
-      <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <Link
-          href="/dashboard"
-          style={{ color: "#6b7280", fontSize: "0.875rem", textDecoration: "none", display: "inline-block", marginBottom: "1.5rem" }}
-        >
-          ← Retour au dashboard
-        </Link>
+    <PageContainer background="gray" maxWidth="lg">
+      <Link
+        href="/dashboard"
+        className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-700"
+      >
+        ← Retour au dashboard
+      </Link>
 
-        <h1 style={{ color: "#111827", fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 0.5rem 0" }}>
-          Mes ventes
-        </h1>
-        <p style={{ color: "#6b7280", fontSize: "0.95rem", margin: "0 0 2rem 0" }}>
-          Toutes vos ventes reçues sur Quicklot.
-        </p>
+      <h1 className="mb-2 text-2xl font-bold text-gray-900">Mes ventes</h1>
+      <p className="mb-8 text-sm text-gray-500">
+        Toutes vos ventes reçues sur Quicklot.
+      </p>
 
-        {orders.length === 0 ? (
-          <div style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
-            <p style={{ color: "#6b7280", fontSize: "0.95rem", margin: 0 }}>
-              Aucune commande reçue pour le moment.
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {orders.map((order) => {
-              const statut = order.statut;
-              const badge = statutBadge(statut);
-              const buyerName = order.buyer?.pseudo || order.buyer?.prenom || order.buyer?.email?.split("@")[0] || "Acheteur";
-              const mode = order.livraison_mode ?? order.shipping_mode;
+      {orders.length === 0 ? (
+        <Card padding="lg" className="text-center">
+          <p className="text-sm text-gray-500">
+            Aucune commande reçue pour le moment.
+          </p>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {orders.map((order) => {
+            const statut = order.statut;
+            const badge = statutBadge(statut);
+            const buyerName =
+              order.buyer?.pseudo ||
+              order.buyer?.prenom ||
+              order.buyer?.email?.split("@")[0] ||
+              "Acheteur";
+            const mode = order.livraison_mode ?? order.shipping_mode;
 
-              return (
-                <div key={order.id} style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1rem", display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-                  {/* Photo */}
-                  {order.listing?.photo_url ? (
-                    <img src={order.listing.photo_url} alt={order.listing.titre} style={{ width: "72px", height: "72px", objectFit: "cover", borderRadius: "8px", flexShrink: 0 }} />
-                  ) : (
-                    <div style={{ width: "72px", height: "72px", backgroundColor: "#f3f4f6", borderRadius: "8px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ color: "#9ca3af", fontSize: "0.65rem" }}>N/A</span>
-                    </div>
-                  )}
-
-                  {/* Infos */}
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <p style={{ color: "#111827", fontSize: "0.95rem", fontWeight: "600", margin: "0 0 0.2rem 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {order.listing?.titre ?? "Listing supprimé"}
-                    </p>
-                    <p style={{ color: "#6b7280", fontSize: "0.8rem", margin: "0 0 0.2rem 0" }}>
-                      {buyerName} · {formatDate(order.created_at)}
-                    </p>
-                    <p style={{ color: "#9ca3af", fontSize: "0.75rem", margin: 0 }}>
-                      {shippingLabel(mode)}
-                    </p>
+            return (
+              <Card key={order.id} padding="sm" className="flex flex-wrap items-center gap-4 p-4">
+                {order.listing?.photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={order.listing.photo_url}
+                    alt={order.listing.titre}
+                    className="h-[72px] w-[72px] flex-shrink-0 rounded-[4px] object-cover"
+                  />
+                ) : (
+                  <div className="flex h-[72px] w-[72px] flex-shrink-0 items-center justify-center rounded-[4px] bg-gray-100">
+                    <span className="text-[0.65rem] text-gray-400">N/A</span>
                   </div>
+                )}
 
-                  {/* Montant + badge */}
-                  <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem" }}>
-                    <p style={{ color: "#111827", fontWeight: "700", fontSize: "1rem", margin: 0 }}>
-                      {(order.seller_amount ?? 0).toFixed(2)} €
-                    </p>
-                    <span style={{ backgroundColor: badge.bg, color: badge.color, fontSize: "0.68rem", fontWeight: "700", padding: "0.2rem 0.55rem", borderRadius: "999px", textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap" }}>
-                      {badge.label}
-                    </span>
-                  </div>
-
-                  {/* Bouton */}
-                  <button
-                    onClick={() => router.push(`/dashboard/commandes/${order.id}`)}
-                    style={{ backgroundColor: "#FF7D07", color: "#ffffff", border: "none", borderRadius: "8px", padding: "0.55rem 1.1rem", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-                  >
-                    Gérer →
-                  </button>
+                <div className="min-w-[200px] flex-1">
+                  <p className="mb-1 truncate text-sm font-semibold text-gray-900">
+                    {order.listing?.titre ?? "Listing supprimé"}
+                  </p>
+                  <p className="mb-1 text-xs text-gray-500">
+                    {buyerName} · {formatDate(order.created_at)}
+                  </p>
+                  <p className="text-[0.7rem] uppercase tracking-wide text-gray-400">
+                    {shippingLabel(mode)}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
+
+                <div className="flex flex-shrink-0 flex-col items-end gap-1.5 text-right">
+                  <p className="text-base font-bold text-gray-900">
+                    {(order.seller_amount ?? 0).toFixed(2)} €
+                  </p>
+                  <Badge variant={badge.variant}>{badge.label}</Badge>
+                </div>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/commandes/${order.id}`)}
+                  className="flex-shrink-0"
+                >
+                  Gérer →
+                </Button>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </PageContainer>
   );
 }
