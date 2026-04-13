@@ -20,7 +20,7 @@ const MAX_WIDTH: Record<MaxWidth, string> = {
 
 const BG: Record<Background, string> = {
   white: "bg-white",
-  gray: "bg-gray-50",
+  gray: "bg-[#F8F9FA]",
 };
 
 export function PageContainer({
@@ -31,7 +31,16 @@ export function PageContainer({
   ...props
 }: PageContainerProps) {
   return (
-    <div className={[BG[background], "min-h-[calc(100vh-56px)] px-4 py-8 sm:px-6 sm:py-10", className].filter(Boolean).join(" ")} {...props}>
+    <div
+      className={[
+        BG[background],
+        "min-h-[calc(100vh-56px)] px-4 py-8 sm:px-6 sm:py-10",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      {...props}
+    >
       <div className={["mx-auto", MAX_WIDTH[maxWidth]].join(" ")}>{children}</div>
     </div>
   );

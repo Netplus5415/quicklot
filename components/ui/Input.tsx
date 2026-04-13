@@ -10,7 +10,15 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const INPUT_BASE =
-  "w-full rounded-lg border bg-white px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500";
+  "w-full rounded-[4px] border-[1.5px] bg-white px-3 py-2 text-[0.875rem] text-gray-900 placeholder:text-gray-400 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500";
+
+const LABEL_CLASS =
+  "text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-[#374151] mb-[0.35rem]";
+
+const FOCUS_OK =
+  "border-[#D1D5DB] focus:border-[#FF7D07] focus:shadow-[0_0_0_3px_rgba(255,125,7,0.12)]";
+const FOCUS_ERROR =
+  "border-red-400 focus:border-red-500 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.12)]";
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   { label, error, helperText, leftIcon, className = "", id, ...props },
@@ -19,14 +27,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const reactId = useId();
   const inputId = id ?? reactId;
 
-  const borderClass = error
-    ? "border-red-400 focus-visible:ring-red-400"
-    : "border-gray-300 focus-visible:ring-[#FF7D07]";
+  const borderClass = error ? FOCUS_ERROR : FOCUS_OK;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col">
       {label && (
-        <label htmlFor={inputId} className="text-sm font-medium text-gray-600">
+        <label htmlFor={inputId} className={LABEL_CLASS}>
           {label}
         </label>
       )}
@@ -53,11 +59,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         />
       </div>
       {error ? (
-        <p id={`${inputId}-error`} className="text-xs text-red-600">
+        <p id={`${inputId}-error`} className="mt-1 text-xs text-red-600">
           {error}
         </p>
       ) : helperText ? (
-        <p id={`${inputId}-helper`} className="text-xs text-gray-500">
+        <p id={`${inputId}-helper`} className="mt-1 text-xs text-gray-500">
           {helperText}
         </p>
       ) : null}
@@ -80,14 +86,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const reactId = useId();
   const inputId = id ?? reactId;
 
-  const borderClass = error
-    ? "border-red-400 focus-visible:ring-red-400"
-    : "border-gray-300 focus-visible:ring-[#FF7D07]";
+  const borderClass = error ? FOCUS_ERROR : FOCUS_OK;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col">
       {label && (
-        <label htmlFor={inputId} className="text-sm font-medium text-gray-600">
+        <label htmlFor={inputId} className={LABEL_CLASS}>
           {label}
         </label>
       )}
@@ -100,11 +104,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         {...props}
       />
       {error ? (
-        <p id={`${inputId}-error`} className="text-xs text-red-600">
+        <p id={`${inputId}-error`} className="mt-1 text-xs text-red-600">
           {error}
         </p>
       ) : helperText ? (
-        <p id={`${inputId}-helper`} className="text-xs text-gray-500">
+        <p id={`${inputId}-helper`} className="mt-1 text-xs text-gray-500">
           {helperText}
         </p>
       ) : null}

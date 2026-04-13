@@ -23,9 +23,8 @@ export function Card({
   ...props
 }: CardProps) {
   const classes = [
-    "rounded-xl bg-white",
-    bordered ? "border border-gray-200" : "",
-    "shadow-sm",
+    "rounded-[6px] bg-white",
+    bordered ? "border border-[#E5E7EB]" : "",
     PADDING[padding],
     className,
   ]
