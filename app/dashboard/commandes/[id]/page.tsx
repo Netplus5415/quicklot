@@ -93,6 +93,18 @@ export default function CommandeDetail() {
     onConfirm: () => void;
   } | null>(null);
 
+  // Litiges
+  const [dispute, setDispute] = useState<{
+    id: string;
+    raison: string;
+    statut: string;
+  } | null>(null);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeRaison, setDisputeRaison] = useState<"non_expedition" | "non_conformite">("non_expedition");
+  const [disputeDescription, setDisputeDescription] = useState("");
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
+
   useEffect(() => {
     async function load() {
       try {
@@ -154,12 +166,78 @@ export default function CommandeDetail() {
             .maybeSingle();
           setHasRating(!!existing);
         }
+
+        // Charger litige éventuel (acheteur et vendeur peuvent voir)
+        const { data: existingDispute } = await supabase
+          .from("disputes")
+          .select("id, raison, statut")
+          .eq("order_id", o.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existingDispute) {
+          setDispute(existingDispute as { id: string; raison: string; statut: string });
+        }
       } finally {
         setLoading(false);
       }
     }
     if (orderId) load();
   }, [orderId, router]);
+
+  async function handleSubmitDispute() {
+    if (!order || !currentUserId) return;
+    const desc = disputeDescription.trim();
+    if (desc.length < 20) {
+      setDisputeError("La description doit faire au moins 20 caractères.");
+      return;
+    }
+    setDisputeSubmitting(true);
+    setDisputeError(null);
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("disputes")
+      .insert({
+        order_id: order.id,
+        buyer_id: currentUserId,
+        seller_id: order.seller_id,
+        raison: disputeRaison,
+        description: desc,
+      })
+      .select("id, raison, statut")
+      .maybeSingle();
+
+    if (insertError || !inserted) {
+      console.error("[commande detail] insert dispute:", insertError);
+      setDisputeError("Une erreur est survenue, veuillez réessayer.");
+      setDisputeSubmitting(false);
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        await fetch("/api/disputes/notify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ dispute_id: (inserted as { id: string }).id }),
+        });
+      }
+    } catch (err) {
+      console.error("[commande detail] dispute notify error:", err);
+    }
+
+    setDispute(inserted as { id: string; raison: string; statut: string });
+    setShowDisputeModal(false);
+    setDisputeDescription("");
+    setDisputeRaison("non_expedition");
+    setDisputeSubmitting(false);
+    setToast({ text: "Litige ouvert. L'équipe Quicklot va l'examiner.", error: false });
+    setTimeout(() => setToast(null), 5000);
+  }
 
   async function handleSave() {
     if (!order) return;
@@ -387,6 +465,90 @@ export default function CommandeDetail() {
 
   return (
     <div style={{ backgroundColor: "#f9fafb", minHeight: "calc(100vh - 56px)", padding: "2rem", fontFamily: "sans-serif" }}>
+      {showDisputeModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !disputeSubmitting && setShowDisputeModal(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 1002, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: "#ffffff", borderRadius: "12px", padding: "1.5rem", maxWidth: "520px", width: "100%", boxShadow: "0 20px 48px rgba(0,0,0,0.25)" }}
+          >
+            <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.2rem", fontWeight: 600, color: "#111827" }}>
+              Ouvrir un litige
+            </h3>
+
+            <label style={{ display: "block", marginBottom: "1rem" }}>
+              <span style={{ display: "block", color: "#374151", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                Raison
+              </span>
+              <select
+                value={disputeRaison}
+                onChange={(e) => setDisputeRaison(e.target.value as "non_expedition" | "non_conformite")}
+                disabled={disputeSubmitting}
+                style={{ width: "100%", padding: "0.6rem 0.85rem", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "0.9rem", color: "#111827", backgroundColor: "#ffffff", fontFamily: "inherit", boxSizing: "border-box" }}
+              >
+                <option value="non_expedition">Le vendeur n&apos;a pas expédié dans les délais</option>
+                <option value="non_conformite">Le lot reçu n&apos;est pas conforme à la description</option>
+              </select>
+            </label>
+
+            <label style={{ display: "block", marginBottom: "1rem" }}>
+              <span style={{ display: "block", color: "#374151", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                Description (min. 20 caractères)
+              </span>
+              <textarea
+                value={disputeDescription}
+                onChange={(e) => setDisputeDescription(e.target.value)}
+                disabled={disputeSubmitting}
+                rows={5}
+                placeholder="Décrivez précisément le problème..."
+                style={{ width: "100%", padding: "0.6rem 0.85rem", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "0.9rem", color: "#111827", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
+              />
+              <p style={{ margin: "0.35rem 0 0 0", color: "#9ca3af", fontSize: "0.75rem" }}>
+                {disputeDescription.trim().length}/20
+              </p>
+            </label>
+
+            {disputeError && (
+              <p style={{ color: "#dc2626", fontSize: "0.85rem", margin: "0 0 0.85rem 0" }}>
+                {disputeError}
+              </p>
+            )}
+
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowDisputeModal(false)}
+                disabled={disputeSubmitting}
+                style={{ padding: "0.6rem 1.1rem", backgroundColor: "#ffffff", color: "#374151", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "0.85rem", fontWeight: 600, cursor: disputeSubmitting ? "not-allowed" : "pointer" }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitDispute}
+                disabled={disputeSubmitting || disputeDescription.trim().length < 20}
+                style={{
+                  padding: "0.6rem 1.1rem",
+                  backgroundColor: disputeSubmitting || disputeDescription.trim().length < 20 ? "#e5e7eb" : "#FF7D07",
+                  color: disputeSubmitting || disputeDescription.trim().length < 20 ? "#9ca3af" : "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  cursor: disputeSubmitting || disputeDescription.trim().length < 20 ? "not-allowed" : "pointer",
+                }}
+              >
+                {disputeSubmitting ? "Envoi…" : "Soumettre le litige"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmModal?.open && (
         <div
           role="dialog"
@@ -605,6 +767,54 @@ export default function CommandeDetail() {
                 </div>
               )}
             </div>
+
+            {(() => {
+              if (dispute) {
+                const map: Record<string, { label: string; bg: string; color: string; border: string }> = {
+                  ouvert:   { label: "Litige ouvert",     bg: "#fef2f2", color: "#dc2626", border: "#fca5a5" },
+                  en_cours: { label: "Litige en cours",   bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+                  resolu:   { label: "Litige résolu",     bg: "#f0fdf4", color: "#16a34a", border: "#86efac" },
+                  clos:     { label: "Litige clos",       bg: "#f3f4f6", color: "#6b7280", border: "#d1d5db" },
+                };
+                const badge = map[dispute.statut] ?? map.ouvert;
+                return (
+                  <div style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1.25rem 1.5rem", marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.85rem", flexWrap: "wrap" }}>
+                    <span style={{ backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, fontSize: "0.78rem", fontWeight: 700, padding: "0.35rem 0.85rem", borderRadius: "999px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                      {badge.label}
+                    </span>
+                    <p style={{ margin: 0, color: "#6b7280", fontSize: "0.85rem" }}>
+                      L&apos;équipe Quicklot examine la situation et vous contactera.
+                    </p>
+                  </div>
+                );
+              }
+
+              const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+              const elapsed = Date.now() - new Date(order.created_at).getTime();
+              const canOpenDispute =
+                (currentStatut === "shipped" && elapsed > fiveDaysMs) ||
+                currentStatut === "delivered";
+
+              if (!canOpenDispute) return null;
+
+              return (
+                <div style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1.25rem 1.5rem", marginBottom: "1.5rem" }}>
+                  <p style={{ margin: "0 0 0.85rem 0", color: "#374151", fontSize: "0.9rem" }}>
+                    Un problème avec cette commande ?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisputeError(null);
+                      setShowDisputeModal(true);
+                    }}
+                    style={{ backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "8px", padding: "0.6rem 1.2rem", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
+                  >
+                    ⚠ Ouvrir un litige
+                  </button>
+                </div>
+              );
+            })()}
 
             {mode === "amazon" && (
               <div style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1.5rem", marginBottom: "1.5rem" }}>
