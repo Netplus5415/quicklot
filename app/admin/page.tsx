@@ -56,6 +56,21 @@ interface PendingListing {
   seller_email?: string;
 }
 
+interface DisputeRow {
+  id: string;
+  order_id: string;
+  buyer_id: string;
+  seller_id: string;
+  raison: string;
+  description: string;
+  statut: string;
+  resolution: string | null;
+  note_admin: string | null;
+  created_at: string;
+  buyer_email?: string;
+  seller_email?: string;
+}
+
 export default function AdminPanel() {
   const router = useRouter();
   const [authLoading, setAuthLoading] = useState(true);
@@ -66,6 +81,8 @@ export default function AdminPanel() {
   const [rejectNote, setRejectNote] = useState<Record<string, string>>({});
   const [pendingListings, setPendingListings] = useState<PendingListing[]>([]);
   const [listingRejectNote, setListingRejectNote] = useState<Record<string, string>>({});
+  const [disputes, setDisputes] = useState<DisputeRow[]>([]);
+  const [disputeNotes, setDisputeNotes] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -134,6 +151,43 @@ export default function AdminPanel() {
     setKycRequests(kycEnriched);
   }
 
+  async function loadDisputes(usersMap?: Record<string, string>) {
+    const { data, error } = await supabase
+      .from("disputes")
+      .select("id, order_id, buyer_id, seller_id, raison, description, statut, resolution, note_admin, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("[admin] loadDisputes error:", error);
+      showToast(GENERIC_ERROR, true);
+      return;
+    }
+
+    let map = usersMap;
+    if (!map) {
+      const { data: usersData } = await supabase.from("users").select("id, email");
+      map = {};
+      (usersData ?? []).forEach((u: { id: string; email: string }) => { map![u.id] = u.email; });
+    }
+
+    const enriched = ((data ?? []) as DisputeRow[]).map((d) => ({
+      ...d,
+      buyer_email: map![d.buyer_id] ?? d.buyer_id.slice(0, 8) + "…",
+      seller_email: map![d.seller_id] ?? d.seller_id.slice(0, 8) + "…",
+    }));
+
+    // Trier : ouvert et en_cours en priorité
+    const priority: Record<string, number> = { ouvert: 0, en_cours: 1, resolu: 2, clos: 3 };
+    enriched.sort((a, b) => {
+      const pa = priority[a.statut] ?? 99;
+      const pb = priority[b.statut] ?? 99;
+      if (pa !== pb) return pa - pb;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    setDisputes(enriched);
+  }
+
   useEffect(() => {
     async function load() {
       try {
@@ -170,6 +224,7 @@ export default function AdminPanel() {
         await Promise.all([
           loadKycRequests(usersMap),
           loadPendingListings(usersMap),
+          loadDisputes(usersMap),
         ]);
       } finally {
         setAuthLoading(false);
@@ -407,6 +462,59 @@ export default function AdminPanel() {
     }
   }
 
+  async function handleDisputeTakeOver(d: DisputeRow) {
+    const { error } = await supabase
+      .from("disputes")
+      .update({ statut: "en_cours", updated_at: new Date().toISOString() })
+      .eq("id", d.id);
+    if (error) {
+      console.error("[admin] dispute take over:", error);
+      showToast(GENERIC_ERROR, true);
+      return;
+    }
+    showToast("Litige pris en charge", false);
+    await loadDisputes();
+  }
+
+  async function handleDisputeResolve(d: DisputeRow) {
+    const note = disputeNotes[d.id]?.trim();
+    if (!note) {
+      showToast("Veuillez saisir une note de résolution.", true);
+      return;
+    }
+    const { error } = await supabase
+      .from("disputes")
+      .update({
+        statut: "resolu",
+        note_admin: note,
+        resolution: note,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", d.id);
+    if (error) {
+      console.error("[admin] dispute resolve:", error);
+      showToast(GENERIC_ERROR, true);
+      return;
+    }
+    setDisputeNotes((prev) => { const n = { ...prev }; delete n[d.id]; return n; });
+    showToast("Litige marqué comme résolu", false);
+    await loadDisputes();
+  }
+
+  async function handleDisputeClose(d: DisputeRow) {
+    const { error } = await supabase
+      .from("disputes")
+      .update({ statut: "clos", updated_at: new Date().toISOString() })
+      .eq("id", d.id);
+    if (error) {
+      console.error("[admin] dispute close:", error);
+      showToast(GENERIC_ERROR, true);
+      return;
+    }
+    showToast("Litige clos", false);
+    await loadDisputes();
+  }
+
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString("fr-FR", {
       day: "2-digit", month: "short", year: "numeric",
@@ -574,6 +682,108 @@ export default function AdminPanel() {
             ))}
           </div>
         )}
+
+        {/* LITIGES */}
+        {(() => {
+          const raisonLabels: Record<string, string> = {
+            non_expedition: "Non-expédition dans les délais",
+            non_conformite: "Lot non conforme",
+          };
+          const statutBadge: Record<string, { label: string; bg: string; color: string; border: string }> = {
+            ouvert:   { label: "Ouvert",     bg: "#fef2f2", color: "#dc2626", border: "#fca5a5" },
+            en_cours: { label: "En cours",   bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+            resolu:   { label: "Résolu",     bg: "#f0fdf4", color: "#16a34a", border: "#86efac" },
+            clos:     { label: "Clos",       bg: "#f3f4f6", color: "#6b7280", border: "#d1d5db" },
+          };
+          const activeCount = disputes.filter((d) => d.statut === "ouvert" || d.statut === "en_cours").length;
+          return (
+            <>
+              <h2 style={sectionTitleStyle}>
+                Litiges ({activeCount} actif{activeCount > 1 ? "s" : ""} · {disputes.length} total)
+              </h2>
+              {disputes.length === 0 ? (
+                <p style={{ color: "#6b7280", fontSize: "0.9rem", marginBottom: "2.5rem" }}>
+                  Aucun litige.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2.5rem" }}>
+                  {disputes.map((d) => {
+                    const badge = statutBadge[d.statut] ?? statutBadge.ouvert;
+                    return (
+                      <div key={d.id} style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1.25rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "0.85rem" }}>
+                          <div style={{ flex: 1, minWidth: "200px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem", flexWrap: "wrap" }}>
+                              <span style={{ backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.65rem", borderRadius: "999px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                {badge.label}
+                              </span>
+                              <span style={{ color: "#111827", fontSize: "0.9rem", fontWeight: 600 }}>
+                                {raisonLabels[d.raison] ?? d.raison}
+                              </span>
+                            </div>
+                            <p style={{ color: "#6b7280", fontSize: "0.78rem", margin: "0 0 0.35rem 0", fontFamily: "monospace" }}>
+                              order: {d.order_id.slice(0, 8)}…
+                            </p>
+                            <p style={{ color: "#6b7280", fontSize: "0.78rem", margin: "0 0 0.35rem 0" }}>
+                              Acheteur : {d.buyer_email} · Vendeur : {d.seller_email}
+                            </p>
+                            <p style={{ color: "#9ca3af", fontSize: "0.75rem", margin: 0 }}>
+                              {formatDate(d.created_at)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "0.75rem 0.95rem", fontSize: "0.85rem", color: "#374151", whiteSpace: "pre-wrap", margin: "0 0 0.85rem 0" }}>
+                          {d.description}
+                        </div>
+
+                        {d.note_admin && (
+                          <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: "8px", padding: "0.65rem 0.9rem", fontSize: "0.8rem", color: "#166534", margin: "0 0 0.85rem 0" }}>
+                            <strong>Note admin :</strong> {d.note_admin}
+                          </div>
+                        )}
+
+                        {(d.statut === "ouvert" || d.statut === "en_cours") && (
+                          <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-end", flexWrap: "wrap", borderTop: "1px solid #f3f4f6", paddingTop: "0.85rem" }}>
+                            <div style={{ flex: 1, minWidth: "200px" }}>
+                              <input
+                                type="text"
+                                value={disputeNotes[d.id] ?? ""}
+                                onChange={(e) => setDisputeNotes((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                                placeholder="Note de résolution (requise pour 'Marquer résolu')"
+                                style={{ width: "100%", padding: "0.5rem 0.85rem", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "0.85rem", color: "#111827", outline: "none", boxSizing: "border-box", fontFamily: "sans-serif" }}
+                              />
+                            </div>
+                            {d.statut === "ouvert" && (
+                              <button
+                                onClick={() => handleDisputeTakeOver(d)}
+                                style={{ backgroundColor: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa", borderRadius: "6px", padding: "0.5rem 0.95rem", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" }}
+                              >
+                                Prendre en charge
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDisputeResolve(d)}
+                              style={{ backgroundColor: "#16a34a", color: "#ffffff", border: "none", borderRadius: "6px", padding: "0.5rem 0.95rem", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" }}
+                            >
+                              Marquer résolu
+                            </button>
+                            <button
+                              onClick={() => handleDisputeClose(d)}
+                              style={{ backgroundColor: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", borderRadius: "6px", padding: "0.5rem 0.95rem", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" }}
+                            >
+                              Clore
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* PENDING LISTINGS */}
         <h2 style={sectionTitleStyle}>
