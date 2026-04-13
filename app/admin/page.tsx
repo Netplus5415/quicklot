@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Badge, Button, Card, Input, PageContainer } from "@/components/ui";
+import type { BadgeProps } from "@/components/ui";
 
 const GENERIC_ERROR = "Une erreur est survenue, veuillez réessayer.";
 
@@ -70,6 +72,11 @@ interface DisputeRow {
   buyer_email?: string;
   seller_email?: string;
 }
+
+const LABEL_STRONG = "text-xs font-semibold uppercase tracking-wide text-gray-500";
+const TH_CLASS =
+  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap border-b border-gray-200";
+const TD_CLASS = "px-4 py-3 text-sm text-gray-700 border-b border-gray-100 align-middle";
 
 export default function AdminPanel() {
   const router = useRouter();
@@ -176,7 +183,6 @@ export default function AdminPanel() {
       seller_email: map![d.seller_id] ?? d.seller_id.slice(0, 8) + "…",
     }));
 
-    // Trier : ouvert et en_cours en priorité
     const priority: Record<string, number> = { ouvert: 0, en_cours: 1, resolu: 2, clos: 3 };
     enriched.sort((a, b) => {
       const pa = priority[a.statut] ?? 99;
@@ -235,7 +241,6 @@ export default function AdminPanel() {
   }, [router]);
 
   async function handleKycApprove(req: KycRequest) {
-    // Update kyc_requests — use .select() to detect 0-row RLS blocks
     const { data: kycUpdated, error: kycErr } = await supabase
       .from("kyc_requests")
       .update({ statut: "approved", note_admin: null, updated_at: new Date().toISOString() })
@@ -253,7 +258,6 @@ export default function AdminPanel() {
       return;
     }
 
-    // Update public.users
     const { data: userUpdated, error: userErr } = await supabase
       .from("users")
       .update({ kyc_status: "verified" })
@@ -271,7 +275,6 @@ export default function AdminPanel() {
       return;
     }
 
-    // Email notification (best-effort)
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -330,7 +333,6 @@ export default function AdminPanel() {
       return;
     }
 
-    // Email notification (best-effort)
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -370,7 +372,6 @@ export default function AdminPanel() {
       return;
     }
 
-    // Notifier le vendeur
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -415,7 +416,6 @@ export default function AdminPanel() {
       return;
     }
 
-    // Notifier le vendeur
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -521,453 +521,376 @@ export default function AdminPanel() {
     });
   }
 
-  function statusColor(status: string) {
+  function statusBadgeVariant(status: string): BadgeProps["variant"] {
     switch (status) {
-      case "active": return "#16a34a";
-      case "pending": return "#d97706";
+      case "active":    return "success";
+      case "pending":   return "warning";
       case "removed":
-      case "cancelled": return "#dc2626";
-      case "completed": return "#2563eb";
-      default: return "#6b7280";
+      case "cancelled": return "error";
+      case "completed": return "info";
+      default:          return "neutral";
+    }
+  }
+
+  function roleBadgeVariant(role: string): BadgeProps["variant"] {
+    if (role === "admin") return "warning";
+    if (role === "seller") return "info";
+    return "neutral";
+  }
+
+  function disputeStatutVariant(statut: string): BadgeProps["variant"] {
+    switch (statut) {
+      case "ouvert":   return "error";
+      case "en_cours": return "warning";
+      case "resolu":   return "success";
+      case "clos":     return "neutral";
+      default:         return "error";
+    }
+  }
+
+  function disputeStatutLabel(statut: string): string {
+    switch (statut) {
+      case "ouvert":   return "Ouvert";
+      case "en_cours": return "En cours";
+      case "resolu":   return "Résolu";
+      case "clos":     return "Clos";
+      default:         return statut;
     }
   }
 
   if (authLoading) {
     return (
-      <div style={{ backgroundColor: "#ffffff", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif" }}>
-        <p style={{ color: "#6b7280" }}>Vérification des accès…</p>
-      </div>
+      <PageContainer background="white" maxWidth="2xl">
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <p className="text-sm text-gray-500">Vérification des accès…</p>
+        </div>
+      </PageContainer>
     );
   }
 
-  const thStyle: React.CSSProperties = {
-    color: "#6b7280",
-    fontSize: "0.75rem",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    padding: "0.75rem 1rem",
-    textAlign: "left",
-    borderBottom: "1px solid #e5e7eb",
-    whiteSpace: "nowrap",
+  const raisonLabels: Record<string, string> = {
+    non_expedition: "Non-expédition dans les délais",
+    non_conformite: "Lot non conforme",
   };
-
-  const tdStyle: React.CSSProperties = {
-    color: "#374151",
-    fontSize: "0.875rem",
-    padding: "0.75rem 1rem",
-    borderBottom: "1px solid #f3f4f6",
-    verticalAlign: "middle",
-  };
-
-  const sectionTitleStyle: React.CSSProperties = {
-    color: "#111827",
-    fontSize: "1.1rem",
-    fontWeight: "600",
-    margin: "0 0 1rem 0",
-  };
-
-  const tableWrapStyle: React.CSSProperties = {
-    backgroundColor: "#ffffff",
-    border: "1px solid #e5e7eb",
-    borderRadius: "12px",
-    overflow: "hidden",
-    overflowX: "auto",
-    marginBottom: "2.5rem",
-  };
+  const activeDisputeCount = disputes.filter((d) => d.statut === "ouvert" || d.statut === "en_cours").length;
 
   return (
-    <div style={{ backgroundColor: "#ffffff", minHeight: "100vh", padding: "2rem", fontFamily: "sans-serif" }}>
+    <PageContainer background="white" maxWidth="2xl">
       {toast && (
         <div
           role="status"
-          style={{
-            position: "fixed",
-            top: "72px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            backgroundColor: toast.error ? "#fef2f2" : "#f0fdf4",
-            color: toast.error ? "#991b1b" : "#166534",
-            border: `1px solid ${toast.error ? "#fca5a5" : "#86efac"}`,
-            borderRadius: "10px",
-            padding: "0.75rem 1.25rem",
-            fontSize: "0.9rem",
-            fontWeight: 500,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-            maxWidth: "calc(100% - 2rem)",
-          }}
+          className={[
+            "fixed left-1/2 top-[72px] z-50 -translate-x-1/2 rounded-[4px] border px-5 py-3 text-sm font-medium max-w-[calc(100%-2rem)]",
+            toast.error
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-green-200 bg-green-50 text-green-800",
+          ].join(" ")}
         >
           {toast.text}
         </div>
       )}
-      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
 
-        <h1 style={{ color: "#111827", fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 2rem 0" }}>
-          Panel Admin
-        </h1>
+      <h1 className="mb-8 text-2xl font-bold text-gray-900">Panel Admin</h1>
 
-        {/* KYC REQUESTS */}
-        <h2 style={sectionTitleStyle}>
-          Demandes de vérification ({kycRequests.length})
-        </h2>
-        {kycRequests.length === 0 ? (
-          <p style={{ color: "#6b7280", fontSize: "0.9rem", marginBottom: "2.5rem" }}>
-            Aucune demande en attente.
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2.5rem" }}>
-            {kycRequests.map((req) => (
-              <div key={req.id} style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1.25rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <p style={{ color: "#111827", fontWeight: "600", fontSize: "1rem", margin: "0 0 0.25rem 0" }}>
-                      {req.nom_entreprise}
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">
+        Demandes de vérification ({kycRequests.length})
+      </h2>
+      {kycRequests.length === 0 ? (
+        <p className="mb-10 text-sm text-gray-500">Aucune demande en attente.</p>
+      ) : (
+        <div className="mb-10 flex flex-col gap-4">
+          {kycRequests.map((req) => (
+            <Card key={req.id} padding="md" className="p-5">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-[200px] flex-1">
+                  <p className="mb-1 text-base font-semibold text-gray-900">{req.nom_entreprise}</p>
+                  <p className="mb-1 text-sm text-gray-500">
+                    N° : <span className="font-mono">{req.numero_entreprise}</span>
+                  </p>
+                  {(req.adresse || req.code_postal || req.ville_kyc || req.pays) && (
+                    <p className="mb-1 text-xs text-gray-500">
+                      📍 {[req.adresse, [req.code_postal, req.ville_kyc].filter(Boolean).join(" "), req.pays].filter(Boolean).join(", ")}
                     </p>
-                    <p style={{ color: "#6b7280", fontSize: "0.85rem", margin: "0 0 0.25rem 0" }}>
-                      N° : <span style={{ fontFamily: "monospace" }}>{req.numero_entreprise}</span>
-                    </p>
-                    {(req.adresse || req.code_postal || req.ville_kyc || req.pays) && (
-                      <p style={{ color: "#6b7280", fontSize: "0.8rem", margin: "0 0 0.25rem 0" }}>
-                        📍 {[req.adresse, [req.code_postal, req.ville_kyc].filter(Boolean).join(" "), req.pays].filter(Boolean).join(", ")}
-                      </p>
-                    )}
-                    <p style={{ color: "#6b7280", fontSize: "0.8rem", margin: 0 }}>
-                      {req.user_email} · {formatDate(req.created_at)}
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flexShrink: 0 }}>
-                    {req.document_url && (
-                      <button
-                        onClick={() => handleDownloadDocument(req.document_url!)}
-                        style={{ backgroundColor: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", borderRadius: "6px", padding: "0.4rem 0.85rem", fontSize: "0.8rem", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}
-                      >
-                        📄 Voir le document
-                      </button>
-                    )}
-                    {req.piece_identite_url && (
-                      <button
-                        onClick={() => handleDownloadDocument(req.piece_identite_url!)}
-                        style={{ backgroundColor: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", borderRadius: "6px", padding: "0.4rem 0.85rem", fontSize: "0.8rem", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}
-                      >
-                        🪪 Voir la pièce d&apos;identité
-                      </button>
-                    )}
-                  </div>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    {req.user_email} · {formatDate(req.created_at)}
+                  </p>
                 </div>
-
-                <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", borderTop: "1px solid #f3f4f6", paddingTop: "1rem" }}>
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <input
-                      type="text"
-                      value={rejectNote[req.id] ?? ""}
-                      onChange={(e) => setRejectNote((prev) => ({ ...prev, [req.id]: e.target.value }))}
-                      placeholder="Raison du refus (si rejet)"
-                      style={{ width: "100%", padding: "0.5rem 0.85rem", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "0.85rem", color: "#111827", outline: "none", boxSizing: "border-box", fontFamily: "sans-serif" }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleKycReject(req)}
-                    style={{ backgroundColor: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "6px", padding: "0.5rem 1rem", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
-                  >
-                    Rejeter
-                  </button>
-                  <button
-                    onClick={() => handleKycApprove(req)}
-                    style={{ backgroundColor: "#16a34a", color: "#fff", border: "none", borderRadius: "6px", padding: "0.5rem 1rem", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
-                  >
-                    ✓ Approuver
-                  </button>
+                <div className="flex flex-shrink-0 flex-col gap-1.5">
+                  {req.document_url && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleDownloadDocument(req.document_url!)}
+                    >
+                      📄 Voir le document
+                    </Button>
+                  )}
+                  {req.piece_identite_url && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleDownloadDocument(req.piece_identite_url!)}
+                    >
+                      🪪 Voir la pièce d&apos;identité
+                    </Button>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* LITIGES */}
-        {(() => {
-          const raisonLabels: Record<string, string> = {
-            non_expedition: "Non-expédition dans les délais",
-            non_conformite: "Lot non conforme",
-          };
-          const statutBadge: Record<string, { label: string; bg: string; color: string; border: string }> = {
-            ouvert:   { label: "Ouvert",     bg: "#fef2f2", color: "#dc2626", border: "#fca5a5" },
-            en_cours: { label: "En cours",   bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
-            resolu:   { label: "Résolu",     bg: "#f0fdf4", color: "#16a34a", border: "#86efac" },
-            clos:     { label: "Clos",       bg: "#f3f4f6", color: "#6b7280", border: "#d1d5db" },
-          };
-          const activeCount = disputes.filter((d) => d.statut === "ouvert" || d.statut === "en_cours").length;
-          return (
-            <>
-              <h2 style={sectionTitleStyle}>
-                Litiges ({activeCount} actif{activeCount > 1 ? "s" : ""} · {disputes.length} total)
-              </h2>
-              {disputes.length === 0 ? (
-                <p style={{ color: "#6b7280", fontSize: "0.9rem", marginBottom: "2.5rem" }}>
-                  Aucun litige.
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2.5rem" }}>
-                  {disputes.map((d) => {
-                    const badge = statutBadge[d.statut] ?? statutBadge.ouvert;
-                    return (
-                      <div key={d.id} style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1.25rem" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "0.85rem" }}>
-                          <div style={{ flex: 1, minWidth: "200px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem", flexWrap: "wrap" }}>
-                              <span style={{ backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.65rem", borderRadius: "999px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                {badge.label}
-                              </span>
-                              <span style={{ color: "#111827", fontSize: "0.9rem", fontWeight: 600 }}>
-                                {raisonLabels[d.raison] ?? d.raison}
-                              </span>
-                            </div>
-                            <p style={{ color: "#6b7280", fontSize: "0.78rem", margin: "0 0 0.35rem 0", fontFamily: "monospace" }}>
-                              order: {d.order_id.slice(0, 8)}…
-                            </p>
-                            <p style={{ color: "#6b7280", fontSize: "0.78rem", margin: "0 0 0.35rem 0" }}>
-                              Acheteur : {d.buyer_email} · Vendeur : {d.seller_email}
-                            </p>
-                            <p style={{ color: "#9ca3af", fontSize: "0.75rem", margin: 0 }}>
-                              {formatDate(d.created_at)}
-                            </p>
-                          </div>
-                        </div>
+              <div className="flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4">
+                <div className="min-w-[200px] flex-1">
+                  <Input
+                    type="text"
+                    value={rejectNote[req.id] ?? ""}
+                    onChange={(e) => setRejectNote((prev) => ({ ...prev, [req.id]: e.target.value }))}
+                    placeholder="Raison du refus (si rejet)"
+                  />
+                </div>
+                <Button variant="danger" size="md" onClick={() => handleKycReject(req)}>
+                  Rejeter
+                </Button>
+                <Button variant="primary" size="md" onClick={() => handleKycApprove(req)}>
+                  ✓ Approuver
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
-                        <div style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "0.75rem 0.95rem", fontSize: "0.85rem", color: "#374151", whiteSpace: "pre-wrap", margin: "0 0 0.85rem 0" }}>
-                          {d.description}
-                        </div>
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">
+        Litiges ({activeDisputeCount} actif{activeDisputeCount > 1 ? "s" : ""} · {disputes.length} total)
+      </h2>
+      {disputes.length === 0 ? (
+        <p className="mb-10 text-sm text-gray-500">Aucun litige.</p>
+      ) : (
+        <div className="mb-10 flex flex-col gap-4">
+          {disputes.map((d) => (
+            <Card key={d.id} padding="md" className="p-5">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-[200px] flex-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <Badge variant={disputeStatutVariant(d.statut)}>
+                      {disputeStatutLabel(d.statut)}
+                    </Badge>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {raisonLabels[d.raison] ?? d.raison}
+                    </span>
+                  </div>
+                  <p className="mb-1 font-mono text-xs text-gray-500">
+                    order: {d.order_id.slice(0, 8)}…
+                  </p>
+                  <p className="mb-1 text-xs text-gray-500">
+                    Acheteur : {d.buyer_email} · Vendeur : {d.seller_email}
+                  </p>
+                  <p className="text-[0.7rem] uppercase tracking-wide text-gray-400">
+                    {formatDate(d.created_at)}
+                  </p>
+                </div>
+              </div>
 
-                        {d.note_admin && (
-                          <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: "8px", padding: "0.65rem 0.9rem", fontSize: "0.8rem", color: "#166534", margin: "0 0 0.85rem 0" }}>
-                            <strong>Note admin :</strong> {d.note_admin}
-                          </div>
-                        )}
+              <div className="mb-3 whitespace-pre-wrap rounded-[4px] border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                {d.description}
+              </div>
 
-                        {(d.statut === "ouvert" || d.statut === "en_cours") && (
-                          <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-end", flexWrap: "wrap", borderTop: "1px solid #f3f4f6", paddingTop: "0.85rem" }}>
-                            <div style={{ flex: 1, minWidth: "200px" }}>
-                              <input
-                                type="text"
-                                value={disputeNotes[d.id] ?? ""}
-                                onChange={(e) => setDisputeNotes((prev) => ({ ...prev, [d.id]: e.target.value }))}
-                                placeholder="Note de résolution (requise pour 'Marquer résolu')"
-                                style={{ width: "100%", padding: "0.5rem 0.85rem", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "0.85rem", color: "#111827", outline: "none", boxSizing: "border-box", fontFamily: "sans-serif" }}
-                              />
-                            </div>
-                            {d.statut === "ouvert" && (
-                              <button
-                                onClick={() => handleDisputeTakeOver(d)}
-                                style={{ backgroundColor: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa", borderRadius: "6px", padding: "0.5rem 0.95rem", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" }}
-                              >
-                                Prendre en charge
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDisputeResolve(d)}
-                              style={{ backgroundColor: "#16a34a", color: "#ffffff", border: "none", borderRadius: "6px", padding: "0.5rem 0.95rem", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" }}
-                            >
-                              Marquer résolu
-                            </button>
-                            <button
-                              onClick={() => handleDisputeClose(d)}
-                              style={{ backgroundColor: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", borderRadius: "6px", padding: "0.5rem 0.95rem", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" }}
-                            >
-                              Clore
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+              {d.note_admin && (
+                <div className="mb-3 rounded-[4px] border border-green-200 bg-green-50 px-4 py-2.5 text-xs text-green-800">
+                  <strong>Note admin :</strong> {d.note_admin}
                 </div>
               )}
-            </>
-          );
-        })()}
 
-        {/* PENDING LISTINGS */}
-        <h2 style={sectionTitleStyle}>
-          Listings en attente ({pendingListings.length})
-        </h2>
-        {pendingListings.length === 0 ? (
-          <p style={{ color: "#6b7280", fontSize: "0.9rem", marginBottom: "2.5rem" }}>
-            Aucun listing en attente de validation.
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2.5rem" }}>
-            {pendingListings.map((l) => (
-              <div key={l.id} style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1.25rem" }}>
-                <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-                  {l.photo_url ? (
-                    <img src={l.photo_url} alt={l.titre} style={{ width: "120px", height: "120px", objectFit: "cover", borderRadius: "8px", flexShrink: 0 }} />
-                  ) : (
-                    <div style={{ width: "120px", height: "120px", backgroundColor: "#f3f4f6", borderRadius: "8px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>Pas de photo</span>
-                    </div>
-                  )}
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <p style={{ color: "#111827", fontWeight: "700", fontSize: "1.05rem", margin: "0 0 0.3rem 0" }}>
-                      {l.titre}
-                    </p>
-                    <p style={{ color: "#FF7D07", fontSize: "1rem", fontWeight: "700", margin: "0 0 0.5rem 0" }}>
-                      {Number(l.prix).toFixed(2)} €
-                      <span style={{ color: "#9ca3af", fontSize: "0.75rem", fontWeight: "500", marginLeft: "0.5rem" }}>
-                        · {l.type}
-                      </span>
-                    </p>
-                    <p style={{ color: "#374151", fontSize: "0.85rem", lineHeight: "1.5", margin: "0 0 0.5rem 0", whiteSpace: "pre-wrap" }}>
-                      {l.description.length > 300 ? l.description.slice(0, 300) + "…" : l.description}
-                    </p>
-                    <p style={{ color: "#9ca3af", fontSize: "0.75rem", margin: 0 }}>
-                      {l.seller_email} · {formatDate(l.created_at)}
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", borderTop: "1px solid #f3f4f6", paddingTop: "1rem" }}>
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <input
+              {(d.statut === "ouvert" || d.statut === "en_cours") && (
+                <div className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3">
+                  <div className="min-w-[200px] flex-1">
+                    <Input
                       type="text"
-                      value={listingRejectNote[l.id] ?? ""}
-                      onChange={(e) => setListingRejectNote((prev) => ({ ...prev, [l.id]: e.target.value }))}
-                      placeholder="Raison du refus (obligatoire si rejet)"
-                      style={{ width: "100%", padding: "0.5rem 0.85rem", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "0.85rem", color: "#111827", outline: "none", boxSizing: "border-box", fontFamily: "sans-serif" }}
+                      value={disputeNotes[d.id] ?? ""}
+                      onChange={(e) => setDisputeNotes((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                      placeholder="Note de résolution (requise pour 'Marquer résolu')"
                     />
                   </div>
-                  <button
-                    onClick={() => handleListingReject(l)}
-                    style={{ backgroundColor: "#fee2e2", color: "#dc2626", border: "none", borderRadius: "6px", padding: "0.5rem 1rem", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
-                  >
-                    Refuser
-                  </button>
-                  <button
-                    onClick={() => handleListingApprove(l)}
-                    style={{ backgroundColor: "#16a34a", color: "#fff", border: "none", borderRadius: "6px", padding: "0.5rem 1rem", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
-                  >
-                    ✓ Approuver
-                  </button>
+                  {d.statut === "ouvert" && (
+                    <Button variant="secondary" size="md" onClick={() => handleDisputeTakeOver(d)}>
+                      Prendre en charge
+                    </Button>
+                  )}
+                  <Button variant="primary" size="md" onClick={() => handleDisputeResolve(d)}>
+                    Marquer résolu
+                  </Button>
+                  <Button variant="secondary" size="md" onClick={() => handleDisputeClose(d)}>
+                    Clore
+                  </Button>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">
+        Listings en attente ({pendingListings.length})
+      </h2>
+      {pendingListings.length === 0 ? (
+        <p className="mb-10 text-sm text-gray-500">Aucun listing en attente de validation.</p>
+      ) : (
+        <div className="mb-10 flex flex-col gap-4">
+          {pendingListings.map((l) => (
+            <Card key={l.id} padding="md" className="p-5">
+              <div className="mb-4 flex flex-wrap gap-4">
+                {l.photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={l.photo_url}
+                    alt={l.titre}
+                    className="h-[120px] w-[120px] flex-shrink-0 rounded-[4px] object-cover"
+                  />
+                ) : (
+                  <div className="flex h-[120px] w-[120px] flex-shrink-0 items-center justify-center rounded-[4px] bg-gray-100">
+                    <span className="text-xs text-gray-400">Pas de photo</span>
+                  </div>
+                )}
+                <div className="min-w-[200px] flex-1">
+                  <p className="mb-1 text-base font-bold text-gray-900">{l.titre}</p>
+                  <p className="mb-2 text-base font-bold text-[#FF7D07]">
+                    {Number(l.prix).toFixed(2)} €
+                    <span className="ml-2 text-xs font-medium text-gray-400">· {l.type}</span>
+                  </p>
+                  <p className="mb-2 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
+                    {l.description.length > 300 ? l.description.slice(0, 300) + "…" : l.description}
+                  </p>
+                  <p className="text-[0.7rem] uppercase tracking-wide text-gray-400">
+                    {l.seller_email} · {formatDate(l.created_at)}
+                  </p>
                 </div>
               </div>
+
+              <div className="flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4">
+                <div className="min-w-[200px] flex-1">
+                  <Input
+                    type="text"
+                    value={listingRejectNote[l.id] ?? ""}
+                    onChange={(e) => setListingRejectNote((prev) => ({ ...prev, [l.id]: e.target.value }))}
+                    placeholder="Raison du refus (obligatoire si rejet)"
+                  />
+                </div>
+                <Button variant="danger" size="md" onClick={() => handleListingReject(l)}>
+                  Refuser
+                </Button>
+                <Button variant="primary" size="md" onClick={() => handleListingApprove(l)}>
+                  ✓ Approuver
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">Listings ({listings.length})</h2>
+      <div className="mb-10 overflow-x-auto rounded-[6px] border border-gray-200 bg-white">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className={TH_CLASS}>ID</th>
+              <th className={TH_CLASS}>Titre</th>
+              <th className={TH_CLASS}>Vendeur</th>
+              <th className={TH_CLASS}>Prix</th>
+              <th className={TH_CLASS}>Statut</th>
+              <th className={TH_CLASS}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {listings.length === 0 ? (
+              <tr>
+                <td colSpan={6} className={`${TD_CLASS} text-center text-gray-500`}>
+                  Aucun listing.
+                </td>
+              </tr>
+            ) : listings.map((l) => (
+              <tr key={l.id}>
+                <td className={`${TD_CLASS} font-mono text-xs text-gray-500`}>{l.id.slice(0, 8)}…</td>
+                <td className={TD_CLASS}>{l.titre}</td>
+                <td className={`${TD_CLASS} text-xs text-gray-500`}>{l.seller_email}</td>
+                <td className={`${TD_CLASS} font-semibold text-gray-900`}>{l.prix.toFixed(2)} €</td>
+                <td className={TD_CLASS}>
+                  <Badge variant={statusBadgeVariant(l.status)}>{l.status}</Badge>
+                </td>
+                <td className={TD_CLASS}>
+                  {l.status !== "removed" ? (
+                    <Button variant="danger" size="sm" onClick={() => handleSupprimer(l.id)}>
+                      Supprimer
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-gray-400">Supprimé</span>
+                  )}
+                </td>
+              </tr>
             ))}
-          </div>
-        )}
-
-        {/* LISTINGS */}
-        <h2 style={sectionTitleStyle}>Listings ({listings.length})</h2>
-        <div style={tableWrapStyle}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ backgroundColor: "#f9fafb" }}>
-                <th style={thStyle}>ID</th>
-                <th style={thStyle}>Titre</th>
-                <th style={thStyle}>Vendeur</th>
-                <th style={thStyle}>Prix</th>
-                <th style={thStyle}>Statut</th>
-                <th style={thStyle}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {listings.length === 0 ? (
-                <tr><td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#6b7280" }}>Aucun listing.</td></tr>
-              ) : listings.map((l) => (
-                <tr key={l.id}>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "0.8rem", color: "#6b7280" }}>{l.id.slice(0, 8)}…</td>
-                  <td style={tdStyle}>{l.titre}</td>
-                  <td style={{ ...tdStyle, color: "#6b7280", fontSize: "0.8rem" }}>{l.seller_email}</td>
-                  <td style={{ ...tdStyle, fontWeight: "600", color: "#111827" }}>{l.prix.toFixed(2)} €</td>
-                  <td style={tdStyle}>
-                    <span style={{ color: statusColor(l.status), fontWeight: "600", fontSize: "0.8rem" }}>{l.status}</span>
-                  </td>
-                  <td style={tdStyle}>
-                    {l.status !== "removed" ? (
-                      <button
-                        onClick={() => handleSupprimer(l.id)}
-                        style={{
-                          backgroundColor: "#fee2e2",
-                          color: "#dc2626",
-                          border: "none",
-                          borderRadius: "6px",
-                          padding: "0.3rem 0.75rem",
-                          fontSize: "0.8rem",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Supprimer
-                      </button>
-                    ) : (
-                      <span style={{ color: "#9ca3af", fontSize: "0.8rem" }}>Supprimé</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* UTILISATEURS */}
-        <h2 style={sectionTitleStyle}>Utilisateurs ({users.length})</h2>
-        <div style={tableWrapStyle}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ backgroundColor: "#f9fafb" }}>
-                <th style={thStyle}>Email</th>
-                <th style={thStyle}>Rôle</th>
-                <th style={thStyle}>Inscrit le</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 ? (
-                <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#6b7280" }}>Aucun utilisateur.</td></tr>
-              ) : users.map((u) => (
-                <tr key={u.id}>
-                  <td style={tdStyle}>{u.email}</td>
-                  <td style={tdStyle}>
-                    <span style={{
-                      color: u.role === "admin" ? "#d97706" : u.role === "seller" ? "#7c3aed" : "#2563eb",
-                      fontWeight: "600",
-                      fontSize: "0.8rem",
-                    }}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td style={{ ...tdStyle, color: "#6b7280" }}>{formatDate(u.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* COMMANDES */}
-        <h2 style={sectionTitleStyle}>Commandes ({orders.length})</h2>
-        <div style={tableWrapStyle}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ backgroundColor: "#f9fafb" }}>
-                <th style={thStyle}>ID</th>
-                <th style={thStyle}>Montant</th>
-                <th style={thStyle}>Statut</th>
-                <th style={thStyle}>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? (
-                <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#6b7280" }}>Aucune commande.</td></tr>
-              ) : orders.map((o) => (
-                <tr key={o.id}>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "0.8rem", color: "#6b7280" }}>{o.id.slice(0, 8)}…</td>
-                  <td style={{ ...tdStyle, fontWeight: "600", color: "#111827" }}>{o.amount.toFixed(2)} €</td>
-                  <td style={tdStyle}>
-                    <span style={{ color: statusColor(o.status), fontWeight: "600", fontSize: "0.8rem" }}>{o.status}</span>
-                  </td>
-                  <td style={{ ...tdStyle, color: "#6b7280" }}>{formatDate(o.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
+          </tbody>
+        </table>
       </div>
-    </div>
+
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">Utilisateurs ({users.length})</h2>
+      <div className="mb-10 overflow-x-auto rounded-[6px] border border-gray-200 bg-white">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className={TH_CLASS}>Email</th>
+              <th className={TH_CLASS}>Rôle</th>
+              <th className={TH_CLASS}>Inscrit le</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={3} className={`${TD_CLASS} text-center text-gray-500`}>
+                  Aucun utilisateur.
+                </td>
+              </tr>
+            ) : users.map((u) => (
+              <tr key={u.id}>
+                <td className={TD_CLASS}>{u.email}</td>
+                <td className={TD_CLASS}>
+                  <Badge variant={roleBadgeVariant(u.role)}>{u.role}</Badge>
+                </td>
+                <td className={`${TD_CLASS} text-gray-500`}>{formatDate(u.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">Commandes ({orders.length})</h2>
+      <div className="mb-10 overflow-x-auto rounded-[6px] border border-gray-200 bg-white">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className={TH_CLASS}>ID</th>
+              <th className={TH_CLASS}>Montant</th>
+              <th className={TH_CLASS}>Statut</th>
+              <th className={TH_CLASS}>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.length === 0 ? (
+              <tr>
+                <td colSpan={4} className={`${TD_CLASS} text-center text-gray-500`}>
+                  Aucune commande.
+                </td>
+              </tr>
+            ) : orders.map((o) => (
+              <tr key={o.id}>
+                <td className={`${TD_CLASS} font-mono text-xs text-gray-500`}>{o.id.slice(0, 8)}…</td>
+                <td className={`${TD_CLASS} font-semibold text-gray-900`}>{o.amount.toFixed(2)} €</td>
+                <td className={TD_CLASS}>
+                  <Badge variant={statusBadgeVariant(o.status)}>{o.status}</Badge>
+                </td>
+                <td className={`${TD_CLASS} text-gray-500`}>{formatDate(o.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </PageContainer>
   );
 }
