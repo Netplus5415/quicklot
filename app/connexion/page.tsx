@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-export default function Connexion() {
+function ConnexionContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect");
+
   const [form, setForm] = useState({ email: "", motDePasse: "" });
   const [erreur, setErreur] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,35 +34,26 @@ export default function Connexion() {
       return;
     }
 
-    const email = data.user?.email;
-
-    if (email === "contact@universpieds.fr") {
+    if (data.user?.email === "contact@quicklot.fr") {
       router.push("/admin");
       return;
     }
 
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", data.user?.id)
-      .single();
-
-    if (profile?.role === "seller") {
-      router.push("/dashboard");
-    } else if (profile?.role === "buyer") {
-      router.push("/dashboard/acheteur");
-    } else {
-      router.push("/boutique");
-    }
+    // Redirection post-connexion : ?redirect=… ou dashboard par défaut
+    // On valide que redirect est un chemin interne (commence par /) pour éviter les open redirects
+    const safeRedirect = redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+      ? redirectTo
+      : "/dashboard";
+    router.push(safeRedirect);
   }
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "0.75rem 1rem",
-    backgroundColor: "#111",
-    border: "1px solid #333",
+    backgroundColor: "#ffffff",
+    border: "1px solid #d1d5db",
     borderRadius: "8px",
-    color: "#fff",
+    color: "#111827",
     fontSize: "1rem",
     outline: "none",
     boxSizing: "border-box",
@@ -67,7 +61,7 @@ export default function Connexion() {
 
   const labelStyle: React.CSSProperties = {
     display: "block",
-    color: "#9ca3af",
+    color: "#6b7280",
     fontSize: "0.875rem",
     marginBottom: "0.4rem",
   };
@@ -75,7 +69,7 @@ export default function Connexion() {
   return (
     <div
       style={{
-        backgroundColor: "#000",
+        backgroundColor: "#ffffff",
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
@@ -88,7 +82,7 @@ export default function Connexion() {
       <div style={{ width: "100%", maxWidth: "440px" }}>
         <h1
           style={{
-            color: "#fff",
+            color: "#111827",
             fontSize: "1.75rem",
             fontWeight: "bold",
             margin: "0 0 0.5rem 0",
@@ -103,7 +97,7 @@ export default function Connexion() {
             margin: "0 0 2rem 0",
           }}
         >
-          Bienvenue sur UniversPieds.
+          Bienvenue sur Quicklot.
         </p>
 
         {erreur && (
@@ -113,9 +107,9 @@ export default function Connexion() {
               borderRadius: "8px",
               marginBottom: "1.25rem",
               fontSize: "0.9rem",
-              backgroundColor: "#1f0a0a",
-              color: "#f87171",
-              border: "1px solid #7f1d1d",
+              backgroundColor: "#fef2f2",
+              color: "#dc2626",
+              border: "1px solid #fca5a5",
             }}
           >
             {erreur}
@@ -161,7 +155,7 @@ export default function Connexion() {
             style={{
               width: "100%",
               padding: "0.9rem",
-              backgroundColor: loading ? "#6b1028" : "#9f1239",
+              backgroundColor: "#FF7D07",
               color: "#fff",
               border: "none",
               borderRadius: "8px",
@@ -186,13 +180,27 @@ export default function Connexion() {
         >
           Pas encore de compte ?{" "}
           <Link
-            href="/"
-            style={{ color: "#f9a8d4", textDecoration: "none" }}
+            href={redirectTo ? `/vendeur/inscription?redirect=${encodeURIComponent(redirectTo)}` : "/vendeur/inscription"}
+            style={{ color: "#FF7D07", textDecoration: "none" }}
           >
             Créer un compte
           </Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function Connexion() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ backgroundColor: "#ffffff", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif" }}>
+          <p style={{ color: "#6b7280" }}>Chargement…</p>
+        </div>
+      }
+    >
+      <ConnexionContent />
+    </Suspense>
   );
 }

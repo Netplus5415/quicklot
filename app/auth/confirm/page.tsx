@@ -26,7 +26,7 @@ function AuthConfirmInner() {
 
       const { user } = data;
 
-      if (user.email === "contact@universpieds.fr") {
+      if (user.email === "contact@quicklot.fr") {
         router.replace("/admin");
         return;
       }
@@ -52,7 +52,7 @@ function AuthConfirmInner() {
   return (
     <div
       style={{
-        backgroundColor: "#000",
+        backgroundColor: "#ffffff",
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
@@ -71,7 +71,7 @@ export default function AuthConfirm() {
       fallback={
         <div
           style={{
-            backgroundColor: "#000",
+            backgroundColor: "#ffffff",
             minHeight: "100vh",
             display: "flex",
             alignItems: "center",
