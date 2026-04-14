@@ -225,9 +225,18 @@ export default function Navigation() {
     <nav className="fixed inset-x-0 top-0 z-[100] flex h-14 items-center gap-2 border-b border-[#FF7D07] bg-white px-4 font-sans sm:px-8">
       <Link
         href="/"
-        className="mr-auto whitespace-nowrap text-base font-bold tracking-tight text-gray-900 sm:text-lg"
+        className="mr-auto flex items-center whitespace-nowrap text-base font-bold tracking-tight text-gray-900 sm:text-lg"
+        style={{ gap: "8px" }}
       >
-        Quicklot
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/favicon.ico"
+          alt=""
+          width={24}
+          height={24}
+          style={{ width: "24px", height: "24px", verticalAlign: "middle" }}
+        />
+        <span>Quicklot</span>
       </Link>
       {connected === null ? null : mobile ? mobileNav : desktopNav}
     </nav>

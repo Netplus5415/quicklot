@@ -52,15 +52,34 @@ export async function POST(request: NextRequest) {
     let accountId = (userRow as { stripe_account_id?: string | null }).stripe_account_id ?? null;
     const userEmail = (userRow as { email?: string | null }).email ?? user.email ?? undefined;
 
+    // Pays optionnel envoyé par le client
+    const ALLOWED_COUNTRIES = ["FR", "BE", "ES", "IT", "LU"] as const;
+    let selectedCountry: (typeof ALLOWED_COUNTRIES)[number] | undefined;
+    try {
+      const body = (await request.json().catch(() => null)) as { country?: unknown } | null;
+      const raw = typeof body?.country === "string" ? body.country.toUpperCase() : null;
+      if (raw && (ALLOWED_COUNTRIES as readonly string[]).includes(raw)) {
+        selectedCountry = raw as (typeof ALLOWED_COUNTRIES)[number];
+      }
+    } catch {
+      // body non-JSON → on ignore
+    }
+
     if (!accountId) {
-      const account = await stripe.accounts.create({
+      const createParams: Stripe.AccountCreateParams = {
         type: "express",
-        country: "FR",
         email: userEmail,
         capabilities: {
           transfers: { requested: true },
         },
-      });
+        business_profile: {
+          url: "https://www.quicklot.fr",
+        },
+      };
+      if (selectedCountry) {
+        createParams.country = selectedCountry;
+      }
+      const account = await stripe.accounts.create(createParams);
       accountId = account.id;
 
       const { error: updateErr } = await supabaseAdmin

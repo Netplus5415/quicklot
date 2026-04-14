@@ -14,6 +14,7 @@ interface Profile {
 }
 
 type StripeAccountStatus = "none" | "pending" | "active";
+type StripeCountry = "FR" | "BE" | "ES" | "IT" | "LU";
 
 export default function ProfilEdit() {
   const router = useRouter();
@@ -31,6 +32,8 @@ export default function ProfilEdit() {
   const [stripeStatus, setStripeStatus] = useState<StripeAccountStatus>("none");
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeToast, setStripeToast] = useState<{ text: string; error: boolean } | null>(null);
+  const [stripeCountryModal, setStripeCountryModal] = useState(false);
+  const [stripeCountry, setStripeCountry] = useState<StripeCountry | "">("");
   const stripeToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stripeRefreshHandledRef = useRef(false);
 
@@ -141,7 +144,7 @@ export default function ProfilEdit() {
     setStripeStatus(resolved);
   }
 
-  async function handleStripeConnect() {
+  async function runStripeConnect(country?: StripeCountry) {
     setStripeLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -150,12 +153,17 @@ export default function ProfilEdit() {
         setStripeLoading(false);
         return;
       }
+      const body: { country?: string } = {};
+      if (country) {
+        body.country = country;
+      }
       const res = await fetch("/api/stripe-connect/onboard", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok || !data?.url) {
@@ -168,6 +176,23 @@ export default function ProfilEdit() {
       showStripeToast(msg, true);
       setStripeLoading(false);
     }
+  }
+
+  function handleStripeConnect() {
+    // Pour un nouveau compte → demander le pays. Pour un compte existant
+    // (pending/active) → Stripe retourne directement le bon lien, pas besoin.
+    if (stripeStatus === "none") {
+      setStripeCountry("");
+      setStripeCountryModal(true);
+      return;
+    }
+    void runStripeConnect();
+  }
+
+  function handleStripeCountryConfirm() {
+    if (!stripeCountry) return;
+    setStripeCountryModal(false);
+    void runStripeConnect(stripeCountry);
   }
 
   useEffect(() => {
@@ -187,7 +212,8 @@ export default function ProfilEdit() {
       const url = new URL(window.location.href);
       url.searchParams.delete("stripe");
       window.history.replaceState({}, "", url.toString());
-      void handleStripeConnect();
+      // Compte déjà existant côté Stripe — lien de rafraîchissement sans re-demander le pays.
+      void runStripeConnect();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -375,6 +401,67 @@ export default function ProfilEdit() {
 
   return (
     <PageContainer maxWidth="lg" background="gray">
+      {stripeCountryModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !stripeLoading && setStripeCountryModal(false)}
+          className="fixed inset-0 z-[1003] flex items-center justify-center bg-black/50 p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[440px] rounded-[6px] border border-gray-200 bg-white p-6 shadow-lg"
+          >
+            <h3 className="mb-2 text-lg font-semibold text-gray-900">
+              Dans quel pays est enregistrée votre entreprise ?
+            </h3>
+            <p className="mb-5 text-sm text-gray-500">
+              Stripe utilisera ce pays pour créer votre compte de reversement.
+            </p>
+
+            <label htmlFor="stripe-country" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Pays
+            </label>
+            <select
+              id="stripe-country"
+              value={stripeCountry}
+              onChange={(e) => setStripeCountry(e.target.value as StripeCountry | "")}
+              disabled={stripeLoading}
+              className="mb-6 w-full cursor-pointer rounded-[4px] border-[1.5px] border-[#D1D5DB] bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#FF7D07] focus:outline-none focus:shadow-[0_0_0_3px_rgba(255,125,7,0.12)]"
+            >
+              <option value="" disabled>
+                Sélectionnez un pays…
+              </option>
+              <option value="FR">France</option>
+              <option value="BE">Belgique</option>
+              <option value="ES">Espagne</option>
+              <option value="IT">Italie</option>
+              <option value="LU">Luxembourg</option>
+            </select>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setStripeCountryModal(false)}
+                disabled={stripeLoading}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleStripeCountryConfirm}
+                loading={stripeLoading}
+                disabled={!stripeCountry || stripeLoading}
+              >
+                Continuer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Link
         href="/dashboard"
         className="mb-6 inline-block text-sm text-gray-500 no-underline hover:text-gray-700"

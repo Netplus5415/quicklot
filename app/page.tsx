@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import HeroButtons from "@/components/HeroButtons";
 
@@ -8,21 +9,56 @@ export const metadata: Metadata = {
     "Achetez et vendez des lots de déstockage, surplus et liquidations. Rejoignez des milliers de professionnels francophones sur Quicklot.",
 };
 
-const STATS = [
+const ICON_PROPS = {
+  width: 22,
+  height: 22,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
+const ShieldIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" {...ICON_PROPS}>
+    <path d="M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6l-8-3Z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+
+const CardIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" {...ICON_PROPS}>
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <line x1="2" y1="10" x2="22" y2="10" />
+    <line x1="6" y1="15" x2="10" y2="15" />
+  </svg>
+);
+
+const UsersIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" {...ICON_PROPS}>
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+const STATS: { icon: ReactNode; value: string; description: string }[] = [
   {
-    icon: "🔒",
-    value: "100% sécurisé",
-    description: "Transactions protégées de bout en bout",
+    icon: <ShieldIcon />,
+    value: "Transactions sécurisées",
+    description: "Identité et activité vérifiées de bout en bout.",
   },
   {
-    icon: "💳",
-    value: "Paiement escrow",
-    description: "Les fonds sont bloqués jusqu'à validation",
+    icon: <CardIcon />,
+    value: "Paiement protégé jusqu'à livraison",
+    description: "Les fonds sont bloqués tant que vous n'avez pas reçu le lot.",
   },
   {
-    icon: "🤝",
-    value: "Communauté pro",
-    description: "Vendeurs et acheteurs vérifiés",
+    icon: <UsersIcon />,
+    value: "Communauté de pros vérifiés",
+    description: "Uniquement des vendeurs et acheteurs professionnels.",
   },
 ];
 
@@ -30,20 +66,18 @@ const STEPS = [
   {
     num: "1",
     title: "Publiez votre lot",
-    description:
-      "Créez votre annonce en quelques minutes avec photos, description et prix.",
+    description: "Créez votre annonce en quelques minutes.",
   },
   {
     num: "2",
-    title: "Un acheteur vous contacte",
-    description:
-      "Recevez des offres de notre réseau de professionnels qualifiés.",
+    title: "Un acheteur achète",
+    description: "Paiement sécurisé directement sur la plateforme.",
   },
   {
     num: "3",
-    title: "Quicklot sécurise le paiement",
+    title: "Expédiez et soyez payé",
     description:
-      "L'argent est bloqué jusqu'à confirmation de livraison des deux parties.",
+      "Une fois la livraison confirmée, les fonds vous sont reversés.",
   },
 ];
 
@@ -55,7 +89,7 @@ export default function Home() {
       <section
         style={{
           position: "relative",
-          height: "100vh",
+          height: "70vh",
           backgroundImage: "url('/hero-warehouse.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -101,7 +135,7 @@ export default function Home() {
               marginBottom: "1.5rem",
             }}
           >
-            La marketplace #1 du déstockage en France
+            Réservé aux professionnels vérifiés
           </span>
 
           <h1
@@ -109,13 +143,25 @@ export default function Home() {
               color: "#ffffff",
               fontSize: "clamp(2rem, 5vw, 3.5rem)",
               fontWeight: "800",
-              margin: "0 0 1.25rem 0",
+              margin: "0 0 0.9rem 0",
               lineHeight: "1.15",
               letterSpacing: "-0.02em",
             }}
           >
             La marketplace des pros du déstockage
           </h1>
+
+          <p
+            style={{
+              color: "rgba(255,255,255,0.7)",
+              fontSize: "0.85rem",
+              fontWeight: 500,
+              letterSpacing: "0.02em",
+              margin: "0 0 1.5rem 0",
+            }}
+          >
+            ★ Communauté de 2 500+ Amazon Sellers francophones
+          </p>
 
           <p
             style={{
@@ -135,35 +181,42 @@ export default function Home() {
       </section>
 
       {/* ── CHIFFRES / STATS ── */}
-      <section style={{ backgroundColor: "#ffffff", padding: "5rem 2rem" }}>
+      <section style={{ backgroundColor: "#ffffff", padding: "3.5rem 2rem" }}>
         <div style={{ maxWidth: "960px", margin: "0 auto" }}>
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-              gap: "2rem",
+              gap: "1rem",
             }}
           >
             {STATS.map((s) => (
               <div
                 key={s.value}
                 style={{
-                  textAlign: "center",
-                  padding: "2rem 1.5rem",
-                  border: "1px solid #f3f4f6",
-                  borderRadius: "16px",
-                  backgroundColor: "#fafafa",
+                  textAlign: "left",
+                  padding: "1.25rem 1.25rem",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "6px",
+                  backgroundColor: "#ffffff",
                 }}
               >
-                <div style={{ fontSize: "2.25rem", marginBottom: "0.75rem" }}>
+                <div
+                  style={{
+                    color: "#FF7D07",
+                    marginBottom: "0.65rem",
+                    display: "inline-flex",
+                  }}
+                >
                   {s.icon}
                 </div>
                 <p
                   style={{
                     color: "#111827",
-                    fontSize: "1.2rem",
-                    fontWeight: "700",
-                    margin: "0 0 0.4rem 0",
+                    fontSize: "0.95rem",
+                    fontWeight: 700,
+                    margin: "0 0 0.25rem 0",
+                    lineHeight: 1.3,
                   }}
                 >
                   {s.value}
@@ -171,9 +224,9 @@ export default function Home() {
                 <p
                   style={{
                     color: "#6b7280",
-                    fontSize: "0.9rem",
+                    fontSize: "0.82rem",
                     margin: 0,
-                    lineHeight: "1.5",
+                    lineHeight: 1.5,
                   }}
                 >
                   {s.description}
