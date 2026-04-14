@@ -74,6 +74,32 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (event.type === "account.updated") {
+    const account = event.data.object as Stripe.Account;
+    console.log("[stripe-webhook] account.updated:", {
+      id: account.id,
+      charges_enabled: account.charges_enabled,
+      payouts_enabled: account.payouts_enabled,
+      details_submitted: account.details_submitted,
+    });
+
+    const newStatus = account.charges_enabled && account.payouts_enabled ? "active" : "pending";
+
+    const { data: updated, error: updateErr } = await supabaseAdmin
+      .from("users")
+      .update({ stripe_account_status: newStatus })
+      .eq("stripe_account_id", account.id)
+      .select();
+
+    if (updateErr) {
+      console.error("[stripe-webhook] users stripe_account_status update error:", updateErr);
+      return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+
+    console.log("[stripe-webhook] stripe_account_status set to", newStatus, "for", updated?.length ?? 0, "row(s)");
+    return NextResponse.json({ received: true, stripe_account_status: newStatus });
+  }
+
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata ?? {};

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -13,6 +13,8 @@ interface Profile {
   avatar_url: string | null;
 }
 
+type StripeAccountStatus = "none" | "pending" | "active";
+
 export default function ProfilEdit() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -24,6 +26,13 @@ export default function ProfilEdit() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ text: string; error: boolean } | null>(null);
+
+  // Stripe Connect
+  const [stripeStatus, setStripeStatus] = useState<StripeAccountStatus>("none");
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeToast, setStripeToast] = useState<{ text: string; error: boolean } | null>(null);
+  const stripeToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stripeRefreshHandledRef = useRef(false);
 
   // KYC
   const [kycStatus, setKycStatus] = useState<string | null>(null);
@@ -53,7 +62,7 @@ export default function ProfilEdit() {
 
         const { data: profileData } = await supabase
           .from("users")
-          .select("pseudo, bio, ville, avatar_url, kyc_status")
+          .select("pseudo, bio, ville, avatar_url, kyc_status, stripe_account_status")
           .eq("id", user.id)
           .single();
 
@@ -65,6 +74,10 @@ export default function ProfilEdit() {
             avatar_url: (profileData as { avatar_url?: string | null }).avatar_url ?? null,
           });
           setKycStatus((profileData as { kyc_status?: string | null }).kyc_status ?? null);
+          const rawStripe = (profileData as { stripe_account_status?: string | null }).stripe_account_status ?? null;
+          const resolvedStripe: StripeAccountStatus =
+            rawStripe === "active" || rawStripe === "pending" ? rawStripe : "none";
+          setStripeStatus(resolvedStripe);
         }
 
         const { data: kycReq } = await supabase
@@ -101,6 +114,83 @@ export default function ProfilEdit() {
     }
     load();
   }, [router]);
+
+  function showStripeToast(text: string, error = false) {
+    setStripeToast({ text, error });
+    if (stripeToastTimerRef.current) clearTimeout(stripeToastTimerRef.current);
+    stripeToastTimerRef.current = setTimeout(() => setStripeToast(null), 5000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (stripeToastTimerRef.current) clearTimeout(stripeToastTimerRef.current);
+    };
+  }, []);
+
+  async function reloadStripeStatus() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("users")
+      .select("stripe_account_status")
+      .eq("id", user.id)
+      .maybeSingle();
+    const raw = (data as { stripe_account_status?: string | null } | null)?.stripe_account_status ?? null;
+    const resolved: StripeAccountStatus =
+      raw === "active" || raw === "pending" ? raw : "none";
+    setStripeStatus(resolved);
+  }
+
+  async function handleStripeConnect() {
+    setStripeLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        showStripeToast("Session expirée. Veuillez vous reconnecter.", true);
+        setStripeLoading(false);
+        return;
+      }
+      const res = await fetch("/api/stripe-connect/onboard", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.url) {
+        throw new Error(data?.error ?? "Impossible de récupérer le lien Stripe.");
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur inconnue";
+      console.error("[stripe-connect] onboard error:", msg);
+      showStripeToast(msg, true);
+      setStripeLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URL(window.location.href).searchParams;
+    const stripeParam = params.get("stripe");
+    if (!stripeParam) return;
+
+    if (stripeParam === "success") {
+      showStripeToast("Compte bancaire connecté avec succès", false);
+      void reloadStripeStatus();
+      const url = new URL(window.location.href);
+      url.searchParams.delete("stripe");
+      window.history.replaceState({}, "", url.toString());
+    } else if (stripeParam === "refresh" && !stripeRefreshHandledRef.current) {
+      stripeRefreshHandledRef.current = true;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("stripe");
+      window.history.replaceState({}, "", url.toString());
+      void handleStripeConnect();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -384,6 +474,71 @@ export default function ProfilEdit() {
           >
             {profileSaving ? "Sauvegarde…" : "Sauvegarder"}
           </Button>
+        </Card>
+      </section>
+
+      {/* ── Stripe Connect ── */}
+      <section className="mb-10">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">
+          Compte bancaire &amp; reversements
+        </h2>
+        <Card padding="lg">
+          {stripeToast && (
+            <div
+              className={`mb-4 max-w-md rounded-[4px] border px-4 py-2.5 text-sm ${
+                stripeToast.error
+                  ? "border-red-200 bg-red-50 text-red-600"
+                  : "border-green-200 bg-green-50 text-green-700"
+              }`}
+            >
+              {stripeToast.text}
+            </div>
+          )}
+
+          {stripeStatus === "active" ? (
+            <div className="flex flex-wrap items-center gap-4">
+              <Badge variant="success">✓ Compte bancaire connecté</Badge>
+              <p className="m-0 flex-1 text-sm text-gray-500">
+                Les reversements sont envoyés automatiquement après chaque vente confirmée.
+              </p>
+              <Button
+                variant="secondary"
+                loading={stripeLoading}
+                onClick={handleStripeConnect}
+              >
+                Gérer mon compte bancaire
+              </Button>
+            </div>
+          ) : stripeStatus === "pending" ? (
+            <div>
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <Badge variant="warning">En cours de vérification</Badge>
+              </div>
+              <p className="mb-5 max-w-lg text-sm text-gray-500">
+                Stripe a bien reçu votre demande mais des informations sont encore nécessaires pour activer les reversements. Complétez votre dossier pour finaliser.
+              </p>
+              <Button
+                variant="primary"
+                loading={stripeLoading}
+                onClick={handleStripeConnect}
+              >
+                Compléter mon dossier
+              </Button>
+            </div>
+          ) : (
+            <div>
+              <p className="mb-5 max-w-lg text-sm text-gray-500">
+                Connectez votre compte bancaire pour recevoir vos reversements automatiquement après chaque vente.
+              </p>
+              <Button
+                variant="primary"
+                loading={stripeLoading}
+                onClick={handleStripeConnect}
+              >
+                Connecter mon compte bancaire
+              </Button>
+            </div>
+          )}
         </Card>
       </section>
 
