@@ -159,18 +159,24 @@ export default function Dashboard() {
     } else {
       if (order?.buyer?.email && order.listing?.titre) {
         try {
-          await fetch("/api/send-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: order.buyer.email,
-              template: "preparation-acheteur",
-              data: {
-                prenom: order.buyer.prenom,
-                titreListing: order.listing.titre,
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            await fetch("/api/send-email", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
               },
-            }),
-          });
+              body: JSON.stringify({
+                to: order.buyer.email,
+                template: "preparation-acheteur",
+                data: {
+                  prenom: order.buyer.prenom,
+                  titreListing: order.listing.titre,
+                },
+              }),
+            });
+          }
         } catch (err) {
           console.error("[dashboard] preparation notify error:", err);
         }
@@ -209,21 +215,27 @@ export default function Dashboard() {
     const sale = sales.find((s) => s.id === orderId);
     if (sale?.buyer?.email) {
       try {
-        await fetch("/api/send-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: sale.buyer.email,
-            template: "expedition-acheteur",
-            data: {
-              prenom: sale.buyer.prenom,
-              titreListing: sale.listing?.titre ?? "votre commande",
-              transporteur: form.transporteur,
-              numeroSuivi: form.numero_suivi.trim(),
-              trackingUrl: trackingUrl(form.transporteur, form.numero_suivi.trim()),
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          await fetch("/api/send-email", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
             },
-          }),
-        });
+            body: JSON.stringify({
+              to: sale.buyer.email,
+              template: "expedition-acheteur",
+              data: {
+                prenom: sale.buyer.prenom,
+                titreListing: sale.listing?.titre ?? "votre commande",
+                transporteur: form.transporteur,
+                numeroSuivi: form.numero_suivi.trim(),
+                trackingUrl: trackingUrl(form.transporteur, form.numero_suivi.trim()),
+              },
+            }),
+          });
+        }
       } catch (err) {
         console.error("[dashboard] send expedition email:", err);
       }

@@ -1,24 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, escapeHtml } from "@/lib/email";
+import { ADMIN_NOTIFY_EMAIL } from "@/lib/admin";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
-
-const ADMIN_EMAIL = "contact@quicklot.fr";
 
 const RAISON_LABELS: Record<string, string> = {
   non_expedition: "Le vendeur n'a pas expédié dans les délais",
   non_conformite: "Le lot reçu n'est pas conforme à la description",
 };
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,6 +55,15 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
+
+    // Rate limit : max 5 notifications de litige par heure et par utilisateur
+    const rl = await checkRateLimit(supabaseAdmin, `disputes-notify:${authUser.id}`, 5, 3600);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Trop de requêtes. Réessayez plus tard." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+      );
+    }
 
     let disputeQuery = supabaseAdmin
       .from("disputes")
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
 </div>
     `.trim();
 
-    await sendEmail(ADMIN_EMAIL, adminSubject, adminHtml);
+    await sendEmail(ADMIN_NOTIFY_EMAIL, adminSubject, adminHtml);
 
     // 2) Email acheteur — confirmation
     if (buyerEmail) {

@@ -203,7 +203,13 @@ export default function AdminPanel() {
           return;
         }
 
-        if (user.email !== "contact@quicklot.fr") {
+        // Vérification du rôle via public.users.role = 'admin'
+        const { data: me } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        if ((me as { role?: string | null } | null)?.role !== "admin") {
           router.replace("/");
           return;
         }

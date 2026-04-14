@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, escapeHtml } from "@/lib/email";
+import { ADMIN_NOTIFY_EMAIL } from "@/lib/admin";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
-
-const ADMIN_EMAIL = "contact@quicklot.fr";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,6 +53,15 @@ export async function POST(request: NextRequest) {
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
 
+    // Rate limit : max 3 demandes KYC par heure par utilisateur
+    const rl = await checkRateLimit(supabaseAdmin, `kyc-notify-admin:${authUser.id}`, 3, 3600);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Trop de demandes. Réessayez plus tard." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+      );
+    }
+
     const { data: user } = await supabaseAdmin
       .from("users")
       .select("email, prenom, nom, entreprise")
@@ -72,9 +81,9 @@ export async function POST(request: NextRequest) {
     Une nouvelle demande KYC vient d'être soumise et est en attente de validation.
   </p>
   <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
-    <p style="margin: 0 0 6px 0; font-size: 14px; color: #374151;"><strong>Utilisateur :</strong> ${prenom} ${nom}</p>
-    <p style="margin: 0 0 6px 0; font-size: 14px; color: #374151;"><strong>Email :</strong> ${email}</p>
-    ${entreprise ? `<p style="margin: 0; font-size: 14px; color: #374151;"><strong>Entreprise :</strong> ${entreprise}</p>` : ""}
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #374151;"><strong>Utilisateur :</strong> ${escapeHtml(prenom)} ${escapeHtml(nom)}</p>
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #374151;"><strong>Email :</strong> ${escapeHtml(email)}</p>
+    ${entreprise ? `<p style="margin: 0; font-size: 14px; color: #374151;"><strong>Entreprise :</strong> ${escapeHtml(entreprise)}</p>` : ""}
   </div>
   <p style="margin: 24px 0;">
     <a href="https://www.quicklot.fr/admin" style="display: inline-block; background-color: #FF7D07; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">
@@ -86,7 +95,7 @@ export async function POST(request: NextRequest) {
 </div>
     `.trim();
 
-    const result = await sendEmail(ADMIN_EMAIL, subject, html);
+    const result = await sendEmail(ADMIN_NOTIFY_EMAIL, subject, html);
     if (!result.ok) {
       return NextResponse.json(
         { error: result.error ?? "Erreur envoi" },

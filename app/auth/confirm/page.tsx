@@ -26,18 +26,15 @@ function AuthConfirmInner() {
 
       const { user } = data;
 
-      if (user.email === "contact@quicklot.fr") {
-        router.replace("/admin");
-        return;
-      }
-
       const { data: profile } = await supabase
         .from("users")
         .select("role")
         .eq("id", user.id)
         .single();
 
-      if (profile?.role === "seller") {
+      if (profile?.role === "admin") {
+        router.replace("/admin");
+      } else if (profile?.role === "seller") {
         router.replace("/dashboard");
       } else if (profile?.role === "buyer") {
         router.replace("/dashboard/acheteur");

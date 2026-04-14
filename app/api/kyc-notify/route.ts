@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail, templateKycApprouve, templateKycRefuse } from "@/lib/email";
+import { isAdminUser } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
-
-const ADMIN_EMAIL = "contact@quicklot.fr";
 
 type KycAction = "approved" | "rejected";
 
@@ -30,8 +29,17 @@ export async function POST(request: NextRequest) {
       console.error("[kyc-notify] auth.getUser failed:", authError);
       return NextResponse.json({ error: "Session invalide." }, { status: 401 });
     }
-    if (authUser.email !== ADMIN_EMAIL) {
-      console.warn("[kyc-notify] non-admin tried to call kyc-notify:", authUser.email);
+
+    // Service role pour vérifier le rôle et lire les données user
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
+
+    const admin = await isAdminUser(supabaseAdmin, authUser.id);
+    if (!admin) {
+      console.warn("[kyc-notify] non-admin tried to call kyc-notify:", authUser.id);
       return NextResponse.json({ error: "Accès réservé à l'administrateur." }, { status: 403 });
     }
 
@@ -53,13 +61,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Service role pour lire l'email et le prénom, même si RLS bloque anon
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    );
 
     const { data: user, error } = await supabaseAdmin
       .from("users")

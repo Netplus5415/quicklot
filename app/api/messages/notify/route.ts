@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, escapeHtml } from "@/lib/email";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,16 @@ export async function POST(request: NextRequest) {
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
 
+    // Rate limit global : max 20 notifications par heure par expéditeur,
+    // même vers des destinataires différents (anti-abus).
+    const rl = await checkRateLimit(supabaseAdmin, `messages-notify:${authUser.id}`, 20, 3600);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Trop de notifications envoyées." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+      );
+    }
+
     // Cooldown : 1h depuis dernière notif sender→recipient
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { data: existing } = await supabaseAdmin
@@ -97,17 +108,17 @@ export async function POST(request: NextRequest) {
       (recipient as { prenom?: string | null } | null)?.prenom ?? null;
     const senderPrenom =
       (sender as { prenom?: string | null } | null)?.prenom ?? "Un utilisateur";
-    const extrait = (body.contenu ?? "").trim();
+    const extrait = (body.contenu ?? "").trim().slice(0, 500);
 
     const subject = "Vous avez un nouveau message — Quicklot";
     const html = `
 <div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; color: #111827; padding: 24px;">
   <h1 style="color: #FF7D07; font-size: 22px; margin: 0 0 16px;">💬 Nouveau message</h1>
-  <p>Bonjour${recipientPrenom ? ` ${recipientPrenom}` : ""},</p>
-  <p><strong>${senderPrenom}</strong> vous a envoyé un nouveau message sur Quicklot.</p>
+  <p>Bonjour${recipientPrenom ? ` ${escapeHtml(recipientPrenom)}` : ""},</p>
+  <p><strong>${escapeHtml(senderPrenom)}</strong> vous a envoyé un nouveau message sur Quicklot.</p>
   ${
     extrait
-      ? `<div style="background: #f9fafb; border-left: 3px solid #FF7D07; padding: 12px 16px; margin: 16px 0; color: #374151; font-style: italic;">${extrait.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`
+      ? `<div style="background: #f9fafb; border-left: 3px solid #FF7D07; padding: 12px 16px; margin: 16px 0; color: #374151; font-style: italic;">${escapeHtml(extrait)}</div>`
       : ""
   }
   <p style="margin-top: 24px;">

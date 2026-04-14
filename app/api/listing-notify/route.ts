@@ -6,10 +6,9 @@ import {
   templateListingApprouve,
   templateListingRefuse,
 } from "@/lib/email";
+import { isAdminUser, ADMIN_NOTIFY_EMAIL } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
-
-const ADMIN_EMAIL = "contact@quicklot.fr";
 
 type Action = "new" | "approved" | "rejected";
 
@@ -87,13 +86,14 @@ export async function POST(request: NextRequest) {
         sellerEmail: (seller as { email?: string } | null)?.email ?? null,
       });
 
-      const r = await sendEmail(ADMIN_EMAIL, subject, html);
+      const r = await sendEmail(ADMIN_NOTIFY_EMAIL, subject, html);
       if (!r.ok) return NextResponse.json({ error: r.error ?? "Envoi échoué" }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
 
     // approved / rejected : admin seulement
-    if (authUser.email !== ADMIN_EMAIL) {
+    const admin = await isAdminUser(supabaseAdmin, authUser.id);
+    if (!admin) {
       return NextResponse.json({ error: "Accès réservé à l'administrateur." }, { status: 403 });
     }
 
