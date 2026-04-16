@@ -93,19 +93,19 @@ export default function ListingDetail() {
 
         const [{ data: sellerData }, { data: sellerRatings }] = await Promise.all([
           supabase
-            .from("users")
+            .from("public_user_profiles")
             .select("pseudo, prenom, ville, kyc_status")
             .eq("id", listingData.seller_id)
             .single(),
           supabase
             .from("ratings")
-            .select("rating, score")
-            .or(`seller_id.eq.${listingData.seller_id},reviewee_id.eq.${listingData.seller_id}`),
+            .select("rating")
+            .eq("reviewee_id", listingData.seller_id),
         ]);
 
         if (sellerData) {
           const values = (sellerRatings ?? [])
-            .map((r: { rating?: number | null; score?: number | null }) => r.rating ?? r.score)
+            .map((r: { rating?: number | null }) => r.rating)
             .filter((v): v is number => typeof v === "number");
           const rating_count = values.length;
           const rating_avg = rating_count > 0 ? values.reduce((s, v) => s + v, 0) / rating_count : null;
@@ -303,9 +303,14 @@ export default function ListingDetail() {
       {/* Titre + prix */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <h1 className="m-0 flex-1 text-3xl font-bold text-gray-900">{listing.titre}</h1>
-        <span className="whitespace-nowrap text-2xl font-bold text-gray-900">
-          {listing.prix.toFixed(2)} €
-        </span>
+        <div className="flex flex-col items-end">
+          <span className="whitespace-nowrap text-2xl font-bold text-gray-900">
+            {listing.prix.toFixed(2)} € HT
+          </span>
+          <span className="text-xs text-gray-400">
+            TVA calculée au paiement
+          </span>
+        </div>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
@@ -408,18 +413,18 @@ export default function ListingDetail() {
           <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
             <div className="mb-1.5 flex justify-between text-sm text-gray-700">
               <span>Prix du lot</span>
-              <span className="font-semibold">{listing.prix.toFixed(2)} €</span>
+              <span className="font-semibold">{listing.prix.toFixed(2)} € HT</span>
             </div>
             <div className="mb-2.5 flex justify-between text-sm text-gray-700">
               <span>{recapLabel}</span>
               <span className="font-semibold">{recapValue}</span>
             </div>
             <div className="flex justify-between border-t border-gray-200 pt-2.5 text-base font-bold text-gray-900">
-              <span>Total à payer</span>
-              <span>{total.toFixed(2)} € TTC</span>
+              <span>Sous-total HT</span>
+              <span>{total.toFixed(2)} € HT</span>
             </div>
             <p className="mt-2 text-right text-[11px] text-gray-400">
-              TVA selon conditions du vendeur
+              TVA et frais calculés à l&apos;étape de paiement
             </p>
           </div>
         </div>
@@ -474,7 +479,7 @@ export default function ListingDetail() {
           ? "Redirection…"
           : needsShippingChoice
           ? "Sélectionnez un mode de livraison"
-          : `Acheter — ${total.toFixed(2)} €`}
+          : `Acheter — ${total.toFixed(2)} € HT`}
       </Button>
     </PageContainer>
   );

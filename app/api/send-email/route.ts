@@ -8,14 +8,22 @@ import {
   templatePreparationAcheteur,
 } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-type TemplateName =
-  | "confirmation-acheteur"
-  | "notification-vendeur"
-  | "expedition-acheteur"
-  | "preparation-acheteur";
+const BodySchema = z.object({
+  to: z.string(),
+  template: z.enum([
+    "confirmation-acheteur",
+    "notification-vendeur",
+    "expedition-acheteur",
+    "preparation-acheteur",
+  ]),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
+type TemplateName = z.infer<typeof BodySchema>["template"];
 
 // Seuls les templates nommés sont acceptés côté client : on interdit
 // l'envoi d'un HTML brut arbitraire pour empêcher l'utilisation de cette
@@ -58,22 +66,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { to, template, data } = body as {
-      to?: string;
-      template?: TemplateName;
-      data?: Record<string, unknown>;
-    };
-
-    if (!to) {
-      return NextResponse.json({ error: "to requis" }, { status: 400 });
-    }
-    if (!template) {
-      return NextResponse.json(
-        { error: "template requis — HTML brut non accepté." },
-        { status: 400 }
-      );
-    }
+    const { to, template, data } = BodySchema.parse(await request.json());
 
     let finalSubject = "";
     let finalHtml = "";

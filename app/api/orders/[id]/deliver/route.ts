@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -94,54 +94,6 @@ export async function POST(
         { error: "Aucune ligne modifiée." },
         { status: 500 }
       );
-    }
-
-    // Reversement Stripe Connect (best-effort — ne bloque pas si erreur)
-    try {
-      const typedOrder = order as { seller_id: string; seller_amount: number | null };
-      const sellerAmount = Number(typedOrder.seller_amount ?? 0);
-
-      if (sellerAmount > 0) {
-        const { data: sellerRow, error: sellerErr } = await supabaseAdmin
-          .from("users")
-          .select("stripe_account_id, stripe_account_status")
-          .eq("id", typedOrder.seller_id)
-          .maybeSingle();
-
-        if (sellerErr) {
-          console.error("[orders/deliver] seller fetch error:", sellerErr);
-        } else if (sellerRow) {
-          const typedSeller = sellerRow as {
-            stripe_account_id?: string | null;
-            stripe_account_status?: string | null;
-          };
-          if (
-            typedSeller.stripe_account_status === "active" &&
-            typedSeller.stripe_account_id
-          ) {
-            const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-            const transfer = await stripe.transfers.create({
-              amount: Math.round(sellerAmount * 100),
-              currency: "eur",
-              destination: typedSeller.stripe_account_id,
-              transfer_group: id,
-            });
-            console.log("[orders/deliver] transfer created:", {
-              id: transfer.id,
-              order: id,
-              amount_eur: sellerAmount,
-            });
-          } else {
-            console.log("[orders/deliver] skip transfer — seller account not active", {
-              order: id,
-              status: typedSeller.stripe_account_status,
-            });
-          }
-        }
-      }
-    } catch (transferErr) {
-      const msg = transferErr instanceof Error ? transferErr.message : "unknown";
-      console.error("[orders/deliver] transfer error (best-effort):", msg);
     }
 
     return NextResponse.json({ ok: true });

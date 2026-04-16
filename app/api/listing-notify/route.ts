@@ -7,10 +7,15 @@ import {
   templateListingRefuse,
 } from "@/lib/email";
 import { isAdminUser, ADMIN_NOTIFY_EMAIL } from "@/lib/admin";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-type Action = "new" | "approved" | "rejected";
+const BodySchema = z.object({
+  action: z.enum(["new", "approved", "rejected"]),
+  listingId: z.string(),
+  raison: z.string().nullable().optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,21 +35,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session invalide." }, { status: 401 });
     }
 
-    const body = (await request.json()) as {
-      action?: Action;
-      listingId?: string;
-      raison?: string | null;
-    };
-
-    if (!body.listingId || !body.action) {
-      return NextResponse.json(
-        { error: "listingId et action requis." },
-        { status: 400 }
-      );
-    }
-    if (!["new", "approved", "rejected"].includes(body.action)) {
-      return NextResponse.json({ error: "action invalide." }, { status: 400 });
-    }
+    const body = BodySchema.parse(await request.json());
 
     // Service role pour lire listing + seller
     const supabaseAdmin = createClient(

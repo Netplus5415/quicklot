@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -54,15 +55,18 @@ export async function POST(request: NextRequest) {
 
     // Pays optionnel envoyé par le client
     const ALLOWED_COUNTRIES = ["FR", "BE", "ES", "IT", "LU"] as const;
+    const BodySchema = z.object({
+      country: z.string().optional(),
+    }).optional();
     let selectedCountry: (typeof ALLOWED_COUNTRIES)[number] | undefined;
     try {
-      const body = (await request.json().catch(() => null)) as { country?: unknown } | null;
+      const body = BodySchema.parse(await request.json().catch(() => undefined));
       const raw = typeof body?.country === "string" ? body.country.toUpperCase() : null;
       if (raw && (ALLOWED_COUNTRIES as readonly string[]).includes(raw)) {
         selectedCountry = raw as (typeof ALLOWED_COUNTRIES)[number];
       }
     } catch {
-      // body non-JSON → on ignore
+      // body non-JSON or validation error → on ignore
     }
 
     if (!accountId) {

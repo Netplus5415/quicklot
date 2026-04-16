@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import HeroButtons from "@/components/HeroButtons";
+import { getArticles } from "@/lib/articles";
 
 export const metadata: Metadata = {
-  title: "Quicklot — La marketplace #1 du déstockage en France",
+  title: "Quicklot — La marketplace du déstockage en France",
   description:
     "Achetez et vendez des lots de déstockage, surplus et liquidations. Rejoignez des milliers de professionnels francophones sur Quicklot.",
 };
@@ -88,39 +89,24 @@ export default function Home() {
       {/* ── HERO ── */}
       <section
         style={{
-          position: "relative",
-          height: "70vh",
-          backgroundImage: "url('/hero-warehouse.png')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          background: "#0F1E3C",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           textAlign: "center",
+          paddingTop: "5rem",
         }}
       >
-        {/* Overlay sombre */}
         <div
           style={{
-            position: "absolute",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.55)",
-          }}
-        />
-
-        {/* Contenu */}
-        <div
-          style={{
-            position: "relative",
-            zIndex: 1,
             maxWidth: "780px",
-            padding: "0 2rem",
+            padding: "0 2rem 4rem",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
           }}
         >
-          {/* Badge */}
           <span
             style={{
               display: "inline-block",
@@ -178,6 +164,16 @@ export default function Home() {
 
           <HeroButtons />
         </div>
+
+        {/* Wave de transition vers le blanc */}
+        <svg
+          viewBox="0 0 1440 70"
+          xmlns="http://www.w3.org/2000/svg"
+          preserveAspectRatio="none"
+          style={{ display: "block", width: "100%", height: "60px", marginBottom: "-2px" }}
+        >
+          <path d="M0,0 Q720,70 1440,0 L1440,70 L0,70 Z" fill="#ffffff" />
+        </svg>
       </section>
 
       {/* ── CHIFFRES / STATS ── */}
@@ -319,6 +315,124 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── BLOG / RESSOURCES ── */}
+      <section style={{ backgroundColor: "#f9fafb", padding: "5rem 2rem" }}>
+        <div style={{ maxWidth: "960px", margin: "0 auto" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "2rem",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+            }}
+          >
+            <h2
+              style={{
+                color: "#111827",
+                fontSize: "clamp(1.5rem, 3vw, 2.25rem)",
+                fontWeight: 800,
+                margin: 0,
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Ressources &amp; conseils
+            </h2>
+            <Link
+              href="/blog"
+              style={{
+                color: "#FF7D07",
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              Voir tous les articles →
+            </Link>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "1.5rem",
+            }}
+          >
+            {getArticles().map((article) => (
+              <Link
+                key={article.slug}
+                href={`/blog/${article.slug}`}
+                style={{ textDecoration: "none", color: "inherit" }}
+              >
+                <div
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "12px",
+                    overflow: "hidden",
+                    backgroundColor: "#ffffff",
+                  }}
+                >
+                  <img
+                    src={article.imageUrl}
+                    alt={article.imageAlt}
+                    style={{
+                      width: "100%",
+                      height: "180px",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                  <div style={{ padding: "1.25rem 1.25rem 1.5rem" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        backgroundColor: "#fff7ed",
+                        color: "#FF7D07",
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "999px",
+                        letterSpacing: "0.03em",
+                        marginBottom: "0.75rem",
+                      }}
+                    >
+                      {article.categorie}
+                    </span>
+                    <h3
+                      style={{
+                        color: "#111827",
+                        fontSize: "1.05rem",
+                        fontWeight: 700,
+                        margin: "0 0 0.5rem 0",
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {article.titre}
+                    </h3>
+                    <p
+                      style={{
+                        color: "#6b7280",
+                        fontSize: "0.85rem",
+                        margin: "0 0 1rem 0",
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {article.extrait.length > 120
+                        ? article.extrait.slice(0, 120) + "..."
+                        : article.extrait}
+                    </p>
+                    <p style={{ color: "#9ca3af", fontSize: "0.75rem", margin: 0 }}>
+                      {article.date} · {article.readTime} de lecture
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── CTA FINALE ── */}
       <section
         style={{
@@ -374,7 +488,7 @@ export default function Home() {
 
       <section
         style={{
-          backgroundColor: "#FF7D07",
+          backgroundColor: "#0F1E3C",
           padding: "5rem 2rem",
           textAlign: "center",
         }}

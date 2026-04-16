@@ -97,7 +97,7 @@ function MessagesContent() {
     if (interlocutorIds.length === 0) { setConversations([]); return; }
 
     const { data: profiles } = await supabase
-      .from("users")
+      .from("public_user_profiles")
       .select("id, pseudo, prenom, avatar_url")
       .in("id", interlocutorIds);
 
@@ -176,7 +176,7 @@ function MessagesContent() {
 
       if (withId) {
         const { data: profile } = await supabase
-          .from("users")
+          .from("public_user_profiles")
           .select("id, pseudo, prenom, avatar_url")
           .eq("id", withId)
           .single();

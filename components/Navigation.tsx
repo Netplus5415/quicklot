@@ -117,6 +117,9 @@ export default function Navigation() {
       <Link href="/boutique" className={linkClass}>
         Catalogue
       </Link>
+      <Link href="/blog" className={linkClass}>
+        Blog
+      </Link>
       {connected ? (
         <>
           <Link href="/dashboard" className={linkClass}>
@@ -177,6 +180,9 @@ export default function Navigation() {
         <div className="fixed inset-x-0 top-14 z-[99] flex flex-col border-b border-gray-200 bg-white shadow-lg">
           <Link href="/boutique" className={dropItemClass} onClick={() => setMenuOpen(false)}>
             Catalogue
+          </Link>
+          <Link href="/blog" className={dropItemClass} onClick={() => setMenuOpen(false)}>
+            Blog
           </Link>
           {connected ? (
             <>

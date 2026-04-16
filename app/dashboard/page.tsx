@@ -73,12 +73,21 @@ export default function Dashboard() {
           return;
         }
 
-        setPrenom(user.user_metadata?.prenom ?? user.email?.split("@")[0] ?? "là");
         setUserId(user.id);
 
+        const { data: profile } = await supabase
+          .from("users")
+          .select("prenom")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        setPrenom(
+          user.user_metadata?.prenom ?? (profile as { prenom?: string | null } | null)?.prenom ?? "là"
+        );
+
         const [
-          { data: listings, error: listingsErr },
-          { data: saleOrders, error: salesErr },
+          { data: listings },
+          { data: saleOrders },
           { count: unreadCount },
         ] = await Promise.all([
           supabase.from("listings").select("id, titre, prix, status, photo_url").eq("seller_id", user.id).neq("status", "removed").order("created_at", { ascending: false }),
@@ -95,9 +104,6 @@ export default function Dashboard() {
             .eq("recipient_id", user.id)
             .eq("lu", false),
         ]);
-
-        if (listingsErr) console.error("[dashboard] listings query error:", listingsErr);
-        if (salesErr) console.error("[dashboard] sales query error:", salesErr);
 
         setListings((listings as Listing[]) ?? []);
         setSales((saleOrders as unknown as SaleOrder[]) ?? []);
@@ -129,14 +135,13 @@ export default function Dashboard() {
   // ── Gestion commandes vendeur ──
 
   async function reloadSales(uid: string) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("orders")
       .select(
         `id, listing_id, amount, seller_amount, statut, created_at, transporteur, numero_suivi, etiquettes_url, notes_vendeur, shipping_mode, listing:listing_id!left (titre, photo_url, preparation_amazon), buyer:buyer_id!left (prenom, email)`
       )
       .eq("seller_id", uid)
       .order("created_at", { ascending: false });
-    if (error) console.error("[dashboard] reloadSales error:", error);
     setSales((data as unknown as SaleOrder[]) ?? []);
   }
 
@@ -154,7 +159,6 @@ export default function Dashboard() {
       .eq("id", orderId)
       .select();
     if (error) {
-      console.error("[dashboard] markPreparing:", error);
       showToast(GENERIC_ERROR, true);
     } else {
       if (order?.buyer?.email && order.listing?.titre) {
@@ -177,9 +181,7 @@ export default function Dashboard() {
               }),
             });
           }
-        } catch (err) {
-          console.error("[dashboard] preparation notify error:", err);
-        }
+        } catch {}
       }
       await reloadSales(userId);
     }
@@ -206,7 +208,6 @@ export default function Dashboard() {
       .select();
 
     if (error || !updated || updated.length === 0) {
-      console.error("[dashboard] markShipped:", error);
       showToast(GENERIC_ERROR, true);
       setBusy(orderId, false);
       return;
@@ -236,9 +237,7 @@ export default function Dashboard() {
             }),
           });
         }
-      } catch (err) {
-        console.error("[dashboard] send expedition email:", err);
-      }
+      } catch {}
     }
 
     setExpandShipment(null);
@@ -265,7 +264,6 @@ export default function Dashboard() {
         .from("order-labels")
         .createSignedUrl(path, 60 * 5);
       if (error || !data) {
-        console.error("[dashboard] download labels:", error);
         showToast(GENERIC_ERROR, true);
         return;
       }
@@ -306,7 +304,6 @@ export default function Dashboard() {
     setDeleteTarget(null);
     const { error } = await supabase.from("listings").update({ status: "removed" }).eq("id", id);
     if (error) {
-      console.error("[dashboard] delete listing:", error);
       showToast(GENERIC_ERROR, true);
       return;
     }
@@ -553,7 +550,7 @@ export default function Dashboard() {
                 const badge = statutBadge(currentStatut);
                 const busy = !!actionLoading[order.id];
                 const hasFba = order.shipping_mode === "amazon";
-                const buyerName = order.buyer?.prenom || order.buyer?.email?.split("@")[0] || "Acheteur";
+                const buyerName = order.buyer?.prenom || "Acheteur";
                 const expanded = expandShipment === order.id;
                 const form = shipmentForm[order.id] ?? { transporteur: "", numero_suivi: "" };
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail, escapeHtml } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -34,18 +35,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session invalide." }, { status: 401 });
     }
 
-    const body = (await request.json()) as {
-      sender_id?: string;
-      recipient_id?: string;
-      contenu?: string;
-    };
-
-    if (!body.sender_id || !body.recipient_id) {
-      return NextResponse.json(
-        { error: "sender_id et recipient_id requis." },
-        { status: 400 }
-      );
-    }
+    const BodySchema = z.object({
+      sender_id: z.string(),
+      recipient_id: z.string(),
+      contenu: z.string().optional(),
+    });
+    const body = BodySchema.parse(await request.json());
     if (body.sender_id !== authUser.id) {
       return NextResponse.json(
         { error: "sender_id non autorisé." },

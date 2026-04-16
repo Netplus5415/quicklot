@@ -128,7 +128,7 @@ export default function VendeursGrid({ initialSellers, total }) {
     setLoading(true);
     try {
       const { data: newSellers } = await supabase
-        .from('users')
+        .from('public_user_profiles')
         .select('id, pseudo, prenom, avatar_url, created_at, kyc_status')
         .eq('role', 'seller')
         .order('created_at', { ascending: false })
@@ -146,16 +146,16 @@ export default function VendeursGrid({ initialSellers, total }) {
           .select('seller_id')
           .eq('status', 'active')
           .in('seller_id', ids),
-        supabase.from('ratings').select('seller_id, score').in('seller_id', ids),
+        supabase.from('ratings').select('reviewee_id, rating').in('reviewee_id', ids),
       ]);
 
       const enriched = newSellers.map((seller) => {
         const sellerListings = (listings || []).filter((l) => l.seller_id === seller.id);
-        const sellerRatings = (ratings || []).filter((r) => r.seller_id === seller.id);
+        const sellerRatings = (ratings || []).filter((r) => r.reviewee_id === seller.id);
         const ratingCount = sellerRatings.length;
         const ratingAvg =
           ratingCount > 0
-            ? sellerRatings.reduce((sum, r) => sum + r.score, 0) / ratingCount
+            ? sellerRatings.reduce((sum, r) => sum + r.rating, 0) / ratingCount
             : null;
         return { ...seller, listingCount: sellerListings.length, ratingCount, ratingAvg };
       });

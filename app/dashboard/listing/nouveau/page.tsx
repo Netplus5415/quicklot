@@ -26,6 +26,7 @@ export default function NouveauListing() {
   const [loading, setLoading] = useState(false);
 
   const [kycStatus, setKycStatus] = useState<string | null>(null);
+  const [stripeStatus, setStripeStatus] = useState<string | null>(null);
 
   // Options de livraison
   const [shipping, setShipping] = useState({
@@ -52,10 +53,13 @@ export default function NouveauListing() {
         // Vérification KYC : on ne peut publier que si kyc_status = 'verified'
         const { data: profile } = await supabase
           .from("users")
-          .select("kyc_status")
+          .select("kyc_status, stripe_account_status")
           .eq("id", user.id)
           .maybeSingle();
         setKycStatus((profile as { kyc_status?: string | null } | null)?.kyc_status ?? null);
+        setStripeStatus(
+          (profile as { stripe_account_status?: string | null } | null)?.stripe_account_status ?? null
+        );
       } finally {
         setAuthLoading(false);
       }
@@ -64,6 +68,7 @@ export default function NouveauListing() {
   }, [router]);
 
   const isKycVerified = kycStatus === "verified";
+  const isStripeActive = stripeStatus === "active";
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -341,6 +346,40 @@ export default function NouveauListing() {
           Publiez un lot ou un produit sur Quicklot.
         </p>
 
+        {!isStripeActive && (
+          <div
+            style={{
+              backgroundColor: "#fff7ed",
+              border: "1px solid #FF7D07",
+              borderRadius: "12px",
+              padding: "1.25rem 1.5rem",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <p style={{ color: "#111827", fontSize: "1rem", fontWeight: "700", margin: "0 0 0.4rem 0" }}>
+              💳 Compte de paiement non activé
+            </p>
+            <p style={{ color: "#6b7280", fontSize: "0.9rem", margin: "0 0 1rem 0", lineHeight: "1.5" }}>
+              Vous devez activer votre compte Stripe Connect avant de pouvoir vendre sur Quicklot.
+            </p>
+            <Link
+              href="/dashboard/profil"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#FF7D07",
+                color: "#ffffff",
+                textDecoration: "none",
+                padding: "0.55rem 1.25rem",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                fontWeight: "600",
+              }}
+            >
+              Activer mon compte →
+            </Link>
+          </div>
+        )}
+
         {!isKycVerified && (
           <div
             style={{
@@ -586,6 +625,9 @@ export default function NouveauListing() {
               required
               style={inputStyle}
             />
+            <p style={{ fontSize: "0.75rem", color: "#6b7280", marginTop: "4px" }}>
+              Prix hors taxes (HT). La TVA sera calculée automatiquement.
+            </p>
           </div>
 
           {/* Codes EAN */}

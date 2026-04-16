@@ -16,7 +16,7 @@ interface Listing {
   photo_url: string | null;
 }
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 12;
 
 type Tri = "date_desc" | "date_asc" | "prix_asc" | "prix_desc";
 
@@ -251,7 +251,7 @@ export default function Boutique() {
 
                   <div className="flex items-center justify-between">
                     <span className="text-xl font-bold text-gray-900">
-                      {listing.prix.toFixed(2)} €
+                      {listing.prix.toFixed(2)} € HT
                     </span>
                     <Link
                       href={`/boutique/${listing.id}`}

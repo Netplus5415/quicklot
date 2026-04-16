@@ -38,30 +38,32 @@ export function RatingModal({
 
     const trimmed = comment.trim() || null;
 
-    const { error: insertError } = await supabase.from("ratings").insert({
-      // Nouvelles colonnes (schéma Phase 4)
-      order_id: orderId,
-      reviewer_id: reviewerId,
-      reviewee_id: revieweeId,
-      listing_id: listingId,
-      rating,
-      comment: trimmed,
-      // Anciennes colonnes (rétrocompat)
-      seller_id: revieweeId,
-      buyer_id: reviewerId,
-      score: rating,
-      commentaire: trimmed,
-    });
+    try {
+      const { error: insertError } = await supabase.from("ratings").insert({
+        order_id: orderId,
+        reviewer_id: reviewerId,
+        reviewee_id: revieweeId,
+        listing_id: listingId,
+        rating,
+        comment: trimmed,
+      });
 
-    if (insertError) {
-      console.error("[rating-modal] insert error:", insertError);
-      setError(insertError.message);
+      if (insertError) {
+        if (insertError.message.includes("policy") || insertError.code === "42501") {
+          setError("Vous ne pourrez laisser un avis qu'une fois la commande expédiée.");
+        } else {
+          setError(insertError.message);
+        }
+        setSubmitting(false);
+        return;
+      }
+
       setSubmitting(false);
-      return;
+      onSuccess();
+    } catch {
+      setError("Vous ne pourrez laisser un avis qu'une fois la commande expédiée.");
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
-    onSuccess();
   }
 
   const active = hover || rating;

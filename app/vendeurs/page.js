@@ -1,15 +1,20 @@
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import VendeursGrid from './VendeursGrid';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 function enrichSellers(sellers, listings, ratings) {
   return sellers.map((seller) => {
     const sellerListings = (listings || []).filter((l) => l.seller_id === seller.id);
-    const sellerRatings = (ratings || []).filter((r) => r.seller_id === seller.id);
+    const sellerRatings = (ratings || []).filter((r) => r.reviewee_id === seller.id);
     const ratingCount = sellerRatings.length;
     const ratingAvg =
       ratingCount > 0
-        ? sellerRatings.reduce((sum, r) => sum + r.score, 0) / ratingCount
+        ? sellerRatings.reduce((sum, r) => sum + r.rating, 0) / ratingCount
         : null;
     return {
       ...seller,
@@ -23,13 +28,13 @@ function enrichSellers(sellers, listings, ratings) {
 export default async function VendeursPage() {
   // Compte total de vendeurs
   const { count } = await supabase
-    .from('users')
+    .from('public_user_profiles')
     .select('*', { count: 'exact', head: true })
     .eq('role', 'seller');
 
   // Premiers 12 vendeurs
   const { data: sellers } = await supabase
-    .from('users')
+    .from('public_user_profiles')
     .select('id, pseudo, prenom, avatar_url, created_at, kyc_status')
     .eq('role', 'seller')
     .order('created_at', { ascending: false })
@@ -42,7 +47,7 @@ export default async function VendeursPage() {
     const ids = initial.map((s) => s.id);
     const [{ data: listings }, { data: ratings }] = await Promise.all([
       supabase.from('listings').select('seller_id').eq('status', 'active').in('seller_id', ids),
-      supabase.from('ratings').select('seller_id, score').in('seller_id', ids),
+      supabase.from('ratings').select('reviewee_id, rating').in('reviewee_id', ids),
     ]);
     enriched = enrichSellers(initial, listings, ratings);
   }
