@@ -30,6 +30,7 @@ export default function ProfilEdit() {
 
   // Stripe Connect
   const [stripeStatus, setStripeStatus] = useState<StripeAccountStatus>("none");
+  const [stripeBalance, setStripeBalance] = useState<{ available: number; pending: number } | null>(null);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeToast, setStripeToast] = useState<{ text: string; error: boolean } | null>(null);
   const [stripeCountryModal, setStripeCountryModal] = useState(false);
@@ -41,6 +42,7 @@ export default function ProfilEdit() {
   const [kycStatus, setKycStatus] = useState<string | null>(null);
   const [kycNoteAdmin, setKycNoteAdmin] = useState<string | null>(null);
   const [kycForm, setKycForm] = useState({
+    bio: "",
     nom_entreprise: "",
     numero_entreprise: "",
     adresse: "",
@@ -77,6 +79,10 @@ export default function ProfilEdit() {
             avatar_url: (profileData as { avatar_url?: string | null }).avatar_url ?? null,
           });
           setKycStatus((profileData as { kyc_status?: string | null }).kyc_status ?? null);
+          setKycForm((f) => ({
+            ...f,
+            bio: (profileData as { bio?: string | null }).bio ?? "",
+          }));
           const rawStripe = (profileData as { stripe_account_status?: string | null }).stripe_account_status ?? null;
           const resolvedStripe: StripeAccountStatus =
             rawStripe === "active" || rawStripe === "pending" ? rawStripe : "none";
@@ -101,14 +107,15 @@ export default function ProfilEdit() {
           };
           setKycNoteAdmin(r.note_admin ?? null);
           if (r.statut === "rejected") {
-            setKycForm({
+            setKycForm((f) => ({
+              ...f,
               nom_entreprise: r.nom_entreprise ?? "",
               numero_entreprise: r.numero_entreprise ?? "",
               adresse: r.adresse ?? "",
               code_postal: r.code_postal ?? "",
               ville_kyc: r.ville_kyc ?? "",
               pays: r.pays ?? "France",
-            });
+            }));
           }
         }
       } finally {
@@ -129,6 +136,33 @@ export default function ProfilEdit() {
       if (stripeToastTimerRef.current) clearTimeout(stripeToastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (stripeStatus !== "active") {
+      setStripeBalance(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      try {
+        const res = await fetch("/api/stripe-connect/balance", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { available?: number; pending?: number };
+        if (!cancelled && typeof data.available === "number" && typeof data.pending === "number") {
+          setStripeBalance({ available: data.available, pending: data.pending });
+        }
+      } catch {
+        // silencieux : le solde est un enrichissement non critique
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [stripeStatus]);
 
   async function reloadStripeStatus() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -253,8 +287,6 @@ export default function ProfilEdit() {
       .from("users")
       .update({
         pseudo: profile.pseudo.trim() || null,
-        bio: profile.bio.trim() || null,
-        ville: profile.ville.trim() || null,
         avatar_url: avatarUrl,
       })
       .eq("id", userId);
@@ -271,11 +303,12 @@ export default function ProfilEdit() {
 
   async function handleKycSubmit() {
     if (!userId) return;
-    if (!profile.bio.trim()) {
-      setKycMessage({
-        text: "Veuillez d'abord renseigner la description de votre activité dans votre profil avant de soumettre votre KYC.",
-        error: true,
-      });
+    if (!kycForm.bio.trim()) {
+      setKycMessage({ text: "Veuillez renseigner la description de votre activité.", error: true });
+      return;
+    }
+    if (!kycForm.ville_kyc.trim()) {
+      setKycMessage({ text: "Veuillez renseigner votre ville.", error: true });
       return;
     }
     if (!kycForm.nom_entreprise.trim() || !kycForm.numero_entreprise.trim()) {
@@ -339,51 +372,46 @@ export default function ProfilEdit() {
       return;
     }
 
-    const { error: upsertError } = await supabase
-      .from("kyc_requests")
-      .upsert(
-        {
-          user_id: userId,
-          nom_entreprise: kycForm.nom_entreprise.trim(),
-          numero_entreprise: kycForm.numero_entreprise.trim(),
-          adresse: kycForm.adresse.trim(),
-          code_postal: kycForm.code_postal.trim(),
-          ville_kyc: kycForm.ville_kyc.trim(),
-          pays: kycForm.pays.trim() || "France",
-          document_url: docPath,
-          piece_identite_url: idPath,
-          statut: "pending",
-          note_admin: null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      );
-
-    if (upsertError) {
-      setKycMessage({ text: upsertError.message, error: true });
+    const { data: { session: kycSession } } = await supabase.auth.getSession();
+    if (!kycSession?.access_token) {
+      setKycMessage({ text: "Session expirée. Veuillez vous reconnecter.", error: true });
       setKycSubmitting(false);
       return;
     }
 
-    await supabase.from("users").update({ kyc_status: "pending" }).eq("id", userId);
+    const submitRes = await fetch("/api/kyc/submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${kycSession.access_token}`,
+      },
+      body: JSON.stringify({
+        nom_entreprise: kycForm.nom_entreprise.trim(),
+        numero_entreprise: kycForm.numero_entreprise.trim(),
+        adresse: kycForm.adresse.trim(),
+        code_postal: kycForm.code_postal.trim(),
+        ville_kyc: kycForm.ville_kyc.trim(),
+        pays: kycForm.pays.trim() || "France",
+        bio: kycForm.bio.trim(),
+        pseudo: kycForm.nom_entreprise.trim() && !profile.pseudo ? kycForm.nom_entreprise.trim() : undefined,
+      }),
+    });
+
+    if (!submitRes.ok) {
+      const errData = await submitRes.json().catch(() => ({}));
+      setKycMessage({ text: (errData as { error?: string }).error ?? "Erreur lors de la soumission.", error: true });
+      setKycSubmitting(false);
+      return;
+    }
+
+    setProfile((prev) => ({
+      ...prev,
+      bio: kycForm.bio.trim(),
+      ville: kycForm.ville_kyc.trim(),
+      ...(kycForm.nom_entreprise.trim() && !profile.pseudo ? { pseudo: kycForm.nom_entreprise.trim() } : {}),
+    }));
 
     setKycStatus("pending");
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        await fetch("/api/kyc-notify-admin", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ userId }),
-        });
-      }
-    } catch (err) {
-      console.error("[kyc] admin notify error:", err);
-    }
 
     setKycFile(null);
     setKycIdFile(null);
@@ -518,30 +546,6 @@ export default function ProfilEdit() {
             </div>
           </div>
 
-          <div className="mb-5 max-w-lg">
-            <Textarea
-              id="bio"
-              label="Description de votre activité *"
-              maxLength={300}
-              rows={4}
-              value={profile.bio}
-              onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
-              placeholder="Décrivez votre activité, vos types de produits, votre zone géographique…"
-              helperText={`${300 - profile.bio.length} caractères restants`}
-            />
-          </div>
-
-          <div className="mb-6 max-w-xs">
-            <Input
-              id="ville"
-              label="Ville"
-              type="text"
-              value={profile.ville}
-              onChange={(e) => setProfile((p) => ({ ...p, ville: e.target.value }))}
-              placeholder="ex : Lyon, Marseille…"
-            />
-          </div>
-
           {profileMessage && (
             <div
               className={`mb-4 max-w-md rounded-lg border px-4 py-2.5 text-sm ${
@@ -583,19 +587,94 @@ export default function ProfilEdit() {
           )}
 
           {stripeStatus === "active" ? (
-            <div className="flex flex-wrap items-center gap-4">
-              <Badge variant="success">✓ Compte bancaire connecté</Badge>
-              <p className="m-0 flex-1 text-sm text-gray-500">
-                Les reversements sont envoyés automatiquement après chaque vente confirmée.
-              </p>
-              <Button
-                variant="secondary"
-                loading={stripeLoading}
-                onClick={handleStripeConnect}
-              >
-                Gérer mon compte bancaire
-              </Button>
-            </div>
+            <>
+              <div className="flex flex-wrap items-center gap-4">
+                <Badge variant="success">✓ Compte bancaire connecté</Badge>
+                <p className="m-0 flex-1 text-sm text-gray-500">
+                  Les reversements sont envoyés automatiquement après chaque vente confirmée.
+                </p>
+                <Button
+                  variant="secondary"
+                  loading={stripeLoading}
+                  onClick={handleStripeConnect}
+                >
+                  Gérer mon compte bancaire
+                </Button>
+              </div>
+              {stripeBalance && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "0.75rem",
+                    marginTop: "1.25rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      backgroundColor: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      borderRadius: "8px",
+                      padding: "0.9rem 1rem",
+                    }}
+                  >
+                    <p
+                      style={{
+                        color: "#166534",
+                        fontSize: "0.7rem",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        margin: "0 0 0.35rem 0",
+                      }}
+                    >
+                      Solde disponible
+                    </p>
+                    <p
+                      style={{
+                        color: "#16a34a",
+                        fontSize: "1.375rem",
+                        fontWeight: 700,
+                        margin: 0,
+                      }}
+                    >
+                      {stripeBalance.available.toFixed(2)} €
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      backgroundColor: "#fff7ed",
+                      border: "1px solid #fed7aa",
+                      borderRadius: "8px",
+                      padding: "0.9rem 1rem",
+                    }}
+                  >
+                    <p
+                      style={{
+                        color: "#9a3412",
+                        fontSize: "0.7rem",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        margin: "0 0 0.35rem 0",
+                      }}
+                    >
+                      En attente
+                    </p>
+                    <p
+                      style={{
+                        color: "#d97706",
+                        fontSize: "1.375rem",
+                        fontWeight: 700,
+                        margin: 0,
+                      }}
+                    >
+                      {stripeBalance.pending.toFixed(2)} €
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
           ) : stripeStatus === "pending" ? (
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -634,11 +713,25 @@ export default function ProfilEdit() {
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Vérification du profil</h2>
         <Card padding="lg">
           {kycStatus === "verified" ? (
-            <div className="flex items-center gap-3">
-              <Badge variant="success">✓ Profil vérifié</Badge>
-              <p className="m-0 text-sm text-gray-500">
-                Votre entreprise a été vérifiée par l&apos;équipe Quicklot.
-              </p>
+            <div>
+              <div className="mb-4 flex items-center gap-3">
+                <Badge variant="success">✓ Profil vérifié</Badge>
+                <p className="m-0 text-sm text-gray-500">
+                  Votre entreprise a été vérifiée par l&apos;équipe Quicklot.
+                </p>
+              </div>
+              {profile.bio && (
+                <div className="mb-3">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Description</p>
+                  <p className="m-0 max-w-lg whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{profile.bio}</p>
+                </div>
+              )}
+              {profile.ville && (
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Ville</p>
+                  <p className="m-0 text-sm text-gray-700">{profile.ville}</p>
+                </div>
+              )}
             </div>
           ) : kycStatus === "pending" ? (
             <div>
@@ -664,6 +757,18 @@ export default function ProfilEdit() {
                 </div>
               )}
 
+              <div className="mb-5 max-w-lg">
+                <Textarea
+                  id="kyc_bio"
+                  label="Description de votre activité *"
+                  maxLength={300}
+                  rows={4}
+                  value={kycForm.bio}
+                  onChange={(e) => setKycForm((f) => ({ ...f, bio: e.target.value }))}
+                  placeholder="Décrivez votre activité, vos types de produits, votre zone géographique…"
+                  helperText={`${300 - kycForm.bio.length} caractères restants`}
+                />
+              </div>
               <div className="mb-5 max-w-md">
                 <Input
                   id="nom_entreprise"

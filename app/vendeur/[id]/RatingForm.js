@@ -24,8 +24,8 @@ export default function RatingForm({ sellerId, sellerName }) {
         const { data } = await supabase
           .from('ratings')
           .select('id')
-          .eq('seller_id', sellerId)
-          .eq('buyer_id', user.id)
+          .eq('reviewee_id', sellerId)
+          .eq('reviewer_id', user.id)
           .maybeSingle();
         setAlreadyRated(!!data);
       }
@@ -74,12 +74,6 @@ export default function RatingForm({ sellerId, sellerName }) {
 
     const trimmed = commentaire.trim() || null;
     const { error } = await supabase.from('ratings').insert({
-      // anciennes colonnes
-      seller_id: sellerId,
-      buyer_id: currentUser.id,
-      score: note,
-      commentaire: trimmed,
-      // nouvelles colonnes (Phase 4)
       reviewer_id: currentUser.id,
       reviewee_id: sellerId,
       rating: note,

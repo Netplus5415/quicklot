@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, escapeHtml } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -78,8 +78,8 @@ export async function POST(
     const subject = "L'acheteur a uploadé ses étiquettes FBA — Quicklot";
     const html = wrap(`
       <h1 style="color: #FF7D07; font-size: 22px; margin: 0 0 16px;">📦 Étiquettes FBA reçues</h1>
-      <p>Bonjour${sellerName ? ` ${sellerName}` : ""},</p>
-      <p>L'acheteur de votre commande <strong>${titre}</strong> vient d'uploader ses étiquettes de préparation Amazon FBA.</p>
+      <p>Bonjour${sellerName ? ` ${escapeHtml(sellerName)}` : ""},</p>
+      <p>L'acheteur de votre commande <strong>${escapeHtml(titre)}</strong> vient d'uploader ses étiquettes de préparation Amazon FBA.</p>
       <p>Vous pouvez les télécharger depuis votre dashboard pour préparer l'expédition vers Amazon.</p>
       <p style="margin-top: 24px;">
         <a href="https://www.quicklot.fr/dashboard/commandes/${o.id}" style="background: #FF7D07; color: #fff; text-decoration: none; padding: 12px 22px; border-radius: 8px; font-weight: 600; display: inline-block;">Télécharger les étiquettes</a>

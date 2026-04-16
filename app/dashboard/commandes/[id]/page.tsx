@@ -662,17 +662,17 @@ export default function CommandeDetail() {
         <div className="grid gap-3 border-t border-gray-100 pt-4 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
           <div>
             <p className={LABEL_CLASS}>{isSellerView ? "Total payé" : "Total"}</p>
-            <p className="text-base font-bold text-gray-900">{(order.amount ?? 0).toFixed(2)} €</p>
+            <p className="text-base font-bold text-gray-900">{(order.amount ?? 0).toFixed(2)} € TTC</p>
           </div>
           {isSellerView && (
             <>
               <div>
                 <p className={LABEL_CLASS}>Net vendeur</p>
-                <p className="text-base font-bold text-green-600">{(order.seller_amount ?? 0).toFixed(2)} €</p>
+                <p className="text-base font-bold text-green-600">{(order.seller_amount ?? 0).toFixed(2)} € HT</p>
               </div>
               <div>
                 <p className={LABEL_CLASS}>Commission</p>
-                <p className="text-base font-bold text-gray-500">{(order.commission_amount ?? 0).toFixed(2)} €</p>
+                <p className="text-base font-bold text-gray-500">{(order.commission_amount ?? 0).toFixed(2)} € HT</p>
               </div>
             </>
           )}

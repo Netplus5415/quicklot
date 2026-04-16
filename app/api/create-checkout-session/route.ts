@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { COMMISSION_RATE } from "@/lib/constants";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-type ShippingChoice = "enlevement" | "france" | "belgique" | "amazon";
+const BodySchema = z.object({
+  listingId: z.string().uuid(),
+  shippingChoice: z.enum(["enlevement", "france", "belgique", "amazon"]),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,25 +55,7 @@ export async function POST(request: NextRequest) {
     );
 
     // ── Lecture body ──
-    const body = (await request.json()) as {
-      listingId?: string;
-      shippingChoice?: ShippingChoice;
-    };
-    const { listingId, shippingChoice } = body;
-
-    if (!listingId) {
-      return NextResponse.json(
-        { error: "listingId requis." },
-        { status: 400 }
-      );
-    }
-
-    if (!shippingChoice || !["enlevement", "france", "belgique", "amazon"].includes(shippingChoice)) {
-      return NextResponse.json(
-        { error: "Mode de livraison invalide." },
-        { status: 400 }
-      );
-    }
+    const { listingId, shippingChoice } = BodySchema.parse(await request.json());
 
     // ── Fetch listing (service role) ──
     const { data: listing, error: listingError } = await supabaseAdmin
@@ -92,10 +78,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Verrou optimiste : pending_payment ──
+    const { data: locked, error: lockErr } = await supabaseAdmin
+      .from("listings")
+      .update({
+        status: "pending_payment",
+        pending_until: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      })
+      .eq("id", listingId)
+      .eq("status", "active")
+      .select();
+
+    if (lockErr || !locked || locked.length === 0) {
+      return NextResponse.json(
+        { error: "Ce listing vient d'être verrouillé par un autre acheteur." },
+        { status: 409 }
+      );
+    }
+
     // ── Empêcher l'auto-achat ──
     if (listing.seller_id === buyerId) {
       return NextResponse.json(
         { error: "Vous ne pouvez pas acheter votre propre listing." },
+        { status: 400 }
+      );
+    }
+
+    // ── Vérifier que le vendeur a un compte Stripe Connect actif ──
+    const { data: seller, error: sellerError } = await supabaseAdmin
+      .from("users")
+      .select("stripe_account_id, stripe_account_status, pays")
+      .eq("id", listing.seller_id)
+      .maybeSingle();
+
+    if (sellerError) {
+      console.error("[create-checkout-session] seller fetch error:", sellerError);
+      return NextResponse.json({ error: "Erreur lecture vendeur." }, { status: 500 });
+    }
+
+    const sellerStripeAccountId =
+      (seller as { stripe_account_id?: string | null } | null)?.stripe_account_id ?? null;
+    const sellerStripeStatus =
+      (seller as { stripe_account_status?: string | null } | null)?.stripe_account_status ?? null;
+
+    if (sellerStripeStatus !== "active" || !sellerStripeAccountId) {
+      return NextResponse.json(
+        {
+          error:
+            "Ce vendeur n'a pas encore activé son compte de paiement. La vente n'est pas disponible.",
+        },
         { status: 400 }
       );
     }
@@ -150,8 +181,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Montants ──
-    const prixTtcCents = Math.round(Number(listing.prix) * 100);
-    const commissionHtCents = Math.round(prixTtcCents * COMMISSION_RATE);
+    const prixHtCents = Math.round(Number(listing.prix) * 100);
+    const totalCents = prixHtCents + shippingCents;
+    const applicationFeeCents = Math.round(prixHtCents * COMMISSION_RATE);
+    const sellerAmountCents = totalCents - applicationFeeCents;
+    const commissionHtCents = applicationFeeCents;
 
     const origin = request.headers.get("origin") ?? request.nextUrl.origin;
 
@@ -162,7 +196,8 @@ export async function POST(request: NextRequest) {
         price_data: {
           currency: "eur",
           product_data: { name: listing.titre },
-          unit_amount: prixTtcCents,
+          unit_amount: prixHtCents,
+          tax_behavior: "exclusive" as const,
         },
         quantity: 1,
       },
@@ -173,6 +208,7 @@ export async function POST(request: NextRequest) {
                 currency: "eur",
                 product_data: { name: shippingLabel },
                 unit_amount: shippingCents,
+                tax_behavior: "exclusive" as const,
               },
               quantity: 1,
             },
@@ -185,19 +221,27 @@ export async function POST(request: NextRequest) {
       buyerId,
       sellerId: listing.seller_id,
       commission_ht: (commissionHtCents / 100).toFixed(2),
-      prix_ttc: (prixTtcCents / 100).toFixed(2),
+      commission_amount: (applicationFeeCents / 100).toFixed(2),
+      seller_amount: (sellerAmountCents / 100).toFixed(2),
+      prix_ht: (prixHtCents / 100).toFixed(2),
       shipping_mode: shippingChoice,
     };
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
-      automatic_tax: { enabled: false },
+      automatic_tax: { enabled: true },
+      customer_creation: "always",
+      tax_id_collection: { enabled: true },
       line_items: lineItems,
       success_url: `${origin}/achat/succes?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/boutique/${listingId}`,
       metadata,
       payment_intent_data: {
+        application_fee_amount: applicationFeeCents,
+        transfer_data: {
+          destination: sellerStripeAccountId,
+        },
         metadata,
       },
     });

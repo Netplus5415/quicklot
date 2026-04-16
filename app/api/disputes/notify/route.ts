@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { sendEmail, escapeHtml } from "@/lib/email";
 import { ADMIN_NOTIFY_EMAIL } from "@/lib/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -39,16 +40,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session invalide." }, { status: 401 });
     }
 
-    const body = (await request.json()) as {
-      dispute_id?: string;
-      order_id?: string;
-    };
-    if (!body.dispute_id && !body.order_id) {
-      return NextResponse.json(
-        { error: "dispute_id ou order_id requis." },
-        { status: 400 }
-      );
-    }
+    const BodySchema = z.object({
+      dispute_id: z.string().optional(),
+      order_id: z.string().optional(),
+    }).refine((d) => d.dispute_id || d.order_id, {
+      message: "dispute_id ou order_id requis.",
+    });
+    const body = BodySchema.parse(await request.json());
 
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

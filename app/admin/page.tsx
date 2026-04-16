@@ -82,6 +82,7 @@ export default function AdminPanel() {
   const router = useRouter();
   const [authLoading, setAuthLoading] = useState(true);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [showRemovedListings, setShowRemovedListings] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [kycRequests, setKycRequests] = useState<KycRequest[]>([]);
@@ -203,13 +204,14 @@ export default function AdminPanel() {
           return;
         }
 
-        // Vérification du rôle via public.users.role = 'admin'
-        const { data: me } = await supabase
-          .from("users")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
-        if ((me as { role?: string | null } | null)?.role !== "admin") {
+        // Vérification admin via /api/admin/check (table admins, source unique de vérité)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { router.replace("/"); return; }
+        const checkRes = await fetch("/api/admin/check", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const checkData = await checkRes.json() as { isAdmin?: boolean };
+        if (!checkData.isAdmin) {
           router.replace("/");
           return;
         }
@@ -246,57 +248,28 @@ export default function AdminPanel() {
     load();
   }, [router]);
 
+  async function adminApiFetch(url: string, body: Record<string, unknown>) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) { showToast("Session expirée.", true); return null; }
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast((err as { error?: string }).error ?? GENERIC_ERROR, true);
+      return null;
+    }
+    return res;
+  }
+
   async function handleKycApprove(req: KycRequest) {
-    const { data: kycUpdated, error: kycErr } = await supabase
-      .from("kyc_requests")
-      .update({ statut: "approved", note_admin: null, updated_at: new Date().toISOString() })
-      .eq("id", req.id)
-      .select();
-
-    if (kycErr) {
-      console.error("[admin] kyc_requests approve error:", kycErr);
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-    if (!kycUpdated || kycUpdated.length === 0) {
-      console.error("[admin] kyc_requests approve: 0 rows affected (RLS block probable)", { reqId: req.id });
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-
-    const { data: userUpdated, error: userErr } = await supabase
-      .from("users")
-      .update({ kyc_status: "verified" })
-      .eq("id", req.user_id)
-      .select();
-
-    if (userErr) {
-      console.error("[admin] users approve error:", userErr);
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-    if (!userUpdated || userUpdated.length === 0) {
-      console.error("[admin] users approve: 0 rows affected (RLS block probable)", { userId: req.user_id });
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        await fetch("/api/kyc-notify", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ userId: req.user_id, action: "approved" }),
-        });
-      }
-    } catch (err) {
-      console.error("[admin] kyc-notify approve error:", err);
-    }
-
+    const res = await adminApiFetch("/api/admin/kyc-action", {
+      action: "approve",
+      kyc_request_id: req.id,
+    });
+    if (!res) return;
     showToast("Demande KYC approuvée ✓", false);
     await loadKycRequests();
   }
@@ -304,168 +277,61 @@ export default function AdminPanel() {
   async function handleKycReject(req: KycRequest) {
     const note = rejectNote[req.id]?.trim();
     if (!note) { showToast("Veuillez saisir une raison de refus.", true); return; }
-
-    const { data: kycUpdated, error: kycErr } = await supabase
-      .from("kyc_requests")
-      .update({ statut: "rejected", note_admin: note, updated_at: new Date().toISOString() })
-      .eq("id", req.id)
-      .select();
-
-    if (kycErr) {
-      console.error("[admin] kyc_requests reject error:", kycErr);
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-    if (!kycUpdated || kycUpdated.length === 0) {
-      console.error("[admin] kyc_requests reject: 0 rows affected (RLS block probable)", { reqId: req.id });
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-
-    const { data: userUpdated, error: userErr } = await supabase
-      .from("users")
-      .update({ kyc_status: "rejected" })
-      .eq("id", req.user_id)
-      .select();
-
-    if (userErr) {
-      console.error("[admin] users reject error:", userErr);
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-    if (!userUpdated || userUpdated.length === 0) {
-      console.error("[admin] users reject: 0 rows affected (RLS block probable)", { userId: req.user_id });
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        await fetch("/api/kyc-notify", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ userId: req.user_id, action: "rejected", raison: note }),
-        });
-      }
-    } catch (err) {
-      console.error("[admin] kyc-notify reject error:", err);
-    }
-
+    const res = await adminApiFetch("/api/admin/kyc-action", {
+      action: "reject",
+      kyc_request_id: req.id,
+      note,
+    });
+    if (!res) return;
     setRejectNote((prev) => { const n = { ...prev }; delete n[req.id]; return n; });
     showToast("Demande KYC refusée", false);
     await loadKycRequests();
   }
 
   async function handleListingApprove(listing: PendingListing) {
-    const { data: updated, error } = await supabase
-      .from("listings")
-      .update({ status: "active", moderation_note: null })
-      .eq("id", listing.id)
-      .select();
-
-    if (error) {
-      console.error("[admin] listing approve error:", error);
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-    if (!updated || updated.length === 0) {
-      console.error("[admin] listing approve: 0 rows affected");
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        await fetch("/api/listing-notify", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ action: "approved", listingId: listing.id }),
-        });
-      }
-    } catch (err) {
-      console.error("[admin] listing-notify approve error:", err);
-    }
-
+    const res = await adminApiFetch("/api/admin/listing-action", {
+      action: "approve",
+      listing_id: listing.id,
+    });
+    if (!res) return;
     showToast("Listing approuvé ✓", false);
     await loadPendingListings();
   }
 
   async function handleListingReject(listing: PendingListing) {
     const note = listingRejectNote[listing.id]?.trim();
-    if (!note) {
-      showToast("Veuillez saisir une raison de refus.", true);
-      return;
-    }
-
-    const { data: updated, error } = await supabase
-      .from("listings")
-      .update({ status: "rejected", moderation_note: note })
-      .eq("id", listing.id)
-      .select();
-
-    if (error) {
-      console.error("[admin] listing reject error:", error);
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-    if (!updated || updated.length === 0) {
-      console.error("[admin] listing reject: 0 rows affected");
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        await fetch("/api/listing-notify", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ action: "rejected", listingId: listing.id, raison: note }),
-        });
-      }
-    } catch (err) {
-      console.error("[admin] listing-notify reject error:", err);
-    }
-
+    if (!note) { showToast("Veuillez saisir une raison de refus.", true); return; }
+    const res = await adminApiFetch("/api/admin/listing-action", {
+      action: "reject",
+      listing_id: listing.id,
+      note,
+    });
+    if (!res) return;
     setListingRejectNote((prev) => { const n = { ...prev }; delete n[listing.id]; return n; });
     showToast("Listing refusé", false);
     await loadPendingListings();
   }
 
   async function handleDownloadDocument(path: string) {
-    const { data, error } = await supabase.storage
-      .from("kyc-documents")
-      .createSignedUrl(path, 60 * 5);
-    if (error || !data) {
-      console.error("[admin] download document error:", error);
-      showToast(GENERIC_ERROR, true);
-      return;
-    }
-    window.open(data.signedUrl, "_blank");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) { showToast("Session expirée.", true); return; }
+    const res = await fetch(`/api/admin/kyc-document?path=${encodeURIComponent(path)}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) { showToast(GENERIC_ERROR, true); return; }
+    const { url } = (await res.json()) as { url?: string };
+    if (url) window.open(url, "_blank");
   }
 
   async function handleSupprimer(listingId: string) {
-    const { error } = await supabase
-      .from("listings")
-      .update({ status: "removed" })
-      .eq("id", listingId);
-
-    if (!error) {
-      setListings((prev) =>
-        prev.map((l) => l.id === listingId ? { ...l, status: "removed" } : l)
-      );
-    }
+    const res = await adminApiFetch("/api/admin/listing-action", {
+      action: "remove",
+      listing_id: listingId,
+    });
+    if (!res) return;
+    setListings((prev) =>
+      prev.map((l) => l.id === listingId ? { ...l, status: "removed" } : l)
+    );
   }
 
   async function handleDisputeTakeOver(d: DisputeRow) {
@@ -792,49 +658,77 @@ export default function AdminPanel() {
         </div>
       )}
 
-      <h2 className="mb-4 text-lg font-semibold text-gray-900">Listings ({listings.length})</h2>
-      <div className="mb-10 overflow-x-auto rounded-[6px] border border-gray-200 bg-white">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className={TH_CLASS}>ID</th>
-              <th className={TH_CLASS}>Titre</th>
-              <th className={TH_CLASS}>Vendeur</th>
-              <th className={TH_CLASS}>Prix</th>
-              <th className={TH_CLASS}>Statut</th>
-              <th className={TH_CLASS}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listings.length === 0 ? (
-              <tr>
-                <td colSpan={6} className={`${TD_CLASS} text-center text-gray-500`}>
-                  Aucun listing.
-                </td>
-              </tr>
-            ) : listings.map((l) => (
-              <tr key={l.id}>
-                <td className={`${TD_CLASS} font-mono text-xs text-gray-500`}>{l.id.slice(0, 8)}…</td>
-                <td className={TD_CLASS}>{l.titre}</td>
-                <td className={`${TD_CLASS} text-xs text-gray-500`}>{l.seller_email}</td>
-                <td className={`${TD_CLASS} font-semibold text-gray-900`}>{l.prix.toFixed(2)} €</td>
-                <td className={TD_CLASS}>
-                  <Badge variant={statusBadgeVariant(l.status)}>{l.status}</Badge>
-                </td>
-                <td className={TD_CLASS}>
-                  {l.status !== "removed" ? (
-                    <Button variant="danger" size="sm" onClick={() => handleSupprimer(l.id)}>
-                      Supprimer
-                    </Button>
-                  ) : (
-                    <span className="text-xs text-gray-400">Supprimé</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {(() => {
+        const removedCount = listings.filter((l) => l.status === "removed").length;
+        const visibleListings = showRemovedListings
+          ? listings
+          : listings.filter((l) => l.status !== "removed");
+        return (
+          <>
+            <h2 className="mb-1 text-lg font-semibold text-gray-900">
+              Listings ({visibleListings.length})
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowRemovedListings((v) => !v)}
+              className="mb-4 text-xs font-medium text-gray-500 underline-offset-2 hover:text-[#FF7D07] hover:underline"
+            >
+              {showRemovedListings
+                ? `Masquer les supprimés (${removedCount})`
+                : `Afficher les supprimés (${removedCount})`}
+            </button>
+            <div className="mb-10 overflow-x-auto rounded-[6px] border border-gray-200 bg-white">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className={TH_CLASS}>ID</th>
+                    <th className={TH_CLASS}>Titre</th>
+                    <th className={TH_CLASS}>Vendeur</th>
+                    <th className={TH_CLASS}>Prix</th>
+                    <th className={TH_CLASS}>Statut</th>
+                    <th className={TH_CLASS}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleListings.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className={`${TD_CLASS} text-center text-gray-500`}>
+                        Aucun listing.
+                      </td>
+                    </tr>
+                  ) : visibleListings.map((l) => {
+                    const isRemoved = l.status === "removed";
+                    return (
+                      <tr key={l.id} className={isRemoved ? "bg-gray-100 text-gray-400" : ""}>
+                        <td className={`${TD_CLASS} font-mono text-xs ${isRemoved ? "text-gray-400" : "text-gray-500"}`}>
+                          {l.id.slice(0, 8)}…
+                        </td>
+                        <td className={`${TD_CLASS} ${isRemoved ? "text-gray-400 line-through" : ""}`}>{l.titre}</td>
+                        <td className={`${TD_CLASS} text-xs ${isRemoved ? "text-gray-400" : "text-gray-500"}`}>{l.seller_email}</td>
+                        <td className={`${TD_CLASS} font-semibold ${isRemoved ? "text-gray-400" : "text-gray-900"}`}>
+                          {l.prix.toFixed(2)} €
+                        </td>
+                        <td className={TD_CLASS}>
+                          <Badge variant={statusBadgeVariant(l.status)}>{l.status}</Badge>
+                        </td>
+                        <td className={TD_CLASS}>
+                          {!isRemoved ? (
+                            <Button variant="danger" size="sm" onClick={() => handleSupprimer(l.id)}>
+                              Supprimer
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-gray-400">Supprimé</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        );
+      })()}
 
       <h2 className="mb-4 text-lg font-semibold text-gray-900">Utilisateurs ({users.length})</h2>
       <div className="mb-10 overflow-x-auto rounded-[6px] border border-gray-200 bg-white">

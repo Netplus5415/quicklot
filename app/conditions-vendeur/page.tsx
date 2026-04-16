@@ -106,6 +106,8 @@ export default function ConditionsVendeur() {
             Quicklot prélève 7,5% HT sur le montant de la vente hors frais de
             livraison. Le solde est reversé au vendeur selon les conditions de
             paiement Stripe Connect (délais standard Stripe applicables).
+            Les prix des annonces sont saisis et affichés hors taxes (HT).
+            La TVA est gérée automatiquement par Stripe Tax au moment du paiement.
           </p>
 
           <h2

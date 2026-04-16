@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail, templateKycApprouve, templateKycRefuse } from "@/lib/email";
 import { isAdminUser } from "@/lib/admin";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-type KycAction = "approved" | "rejected";
+const BodySchema = z.object({
+  userId: z.string(),
+  action: z.enum(["approved", "rejected"]),
+  raison: z.string().nullable().optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,24 +48,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Accès réservé à l'administrateur." }, { status: 403 });
     }
 
-    const body = (await request.json()) as {
-      userId?: string;
-      action?: KycAction;
-      raison?: string | null;
-    };
-
-    if (!body.userId || !body.action) {
-      return NextResponse.json(
-        { error: "userId et action requis." },
-        { status: 400 }
-      );
-    }
-    if (body.action !== "approved" && body.action !== "rejected") {
-      return NextResponse.json(
-        { error: "action invalide (approved | rejected)." },
-        { status: 400 }
-      );
-    }
+    const body = BodySchema.parse(await request.json());
 
     const { data: user, error } = await supabaseAdmin
       .from("users")

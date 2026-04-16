@@ -129,7 +129,6 @@ export default function CommandesListe() {
             const buyerName =
               order.buyer?.pseudo ||
               order.buyer?.prenom ||
-              order.buyer?.email?.split("@")[0] ||
               "Acheteur";
             const mode = order.livraison_mode ?? order.shipping_mode;
 
@@ -162,7 +161,7 @@ export default function CommandesListe() {
 
                 <div className="flex flex-shrink-0 flex-col items-end gap-1.5 text-right">
                   <p className="text-base font-bold text-gray-900">
-                    {(order.seller_amount ?? 0).toFixed(2)} €
+                    {(order.seller_amount ?? 0).toFixed(2)} € HT
                   </p>
                   <Badge variant={badge.variant}>{badge.label}</Badge>
                 </div>

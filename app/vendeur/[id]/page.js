@@ -1,19 +1,19 @@
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
-import RatingForm from './RatingForm';
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 import { computeRatingStats, ratingValue, ratingComment, ratingReviewerName, renderStarsString } from '@/lib/ratings';
 import { Badge, Card, PageContainer } from '@/components/ui';
 
 export default async function VendeurProfile({ params }) {
   const { id } = await params;
 
-  const { data: vendeurArr, error: vendeurError } = await supabase
-    .from('users')
+  const { data: vendeurArr } = await supabase
+    .from('public_user_profiles')
     .select('id, pseudo, bio, ville, avatar_url, prenom, created_at, role, kyc_status')
     .eq('id', id);
-
-  if (vendeurError) console.error('[vendeur page] query error:', vendeurError);
-  console.log('[vendeur page] id:', id, 'result:', vendeurArr);
 
   const vendeur = vendeurArr?.[0] ?? null;
 
@@ -25,8 +25,8 @@ export default async function VendeurProfile({ params }) {
       .eq('status', 'active'),
     supabase
       .from('ratings')
-      .select('id, score, rating, commentaire, comment, created_at, reviewer:reviewer_id (pseudo, prenom), buyer:buyer_id (pseudo, prenom)')
-      .or(`seller_id.eq.${id},reviewee_id.eq.${id}`)
+      .select('id, rating, comment, created_at, reviewer:reviewer_id (pseudo, prenom)')
+      .eq('reviewee_id', id)
       .order('created_at', { ascending: false })
       .limit(10),
   ]);
@@ -50,10 +50,10 @@ export default async function VendeurProfile({ params }) {
   return (
     <PageContainer background="white" maxWidth="lg">
       <Link
-        href="/vendeurs"
+        href="/dashboard/profil"
         className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-700"
       >
-        ← Retour aux vendeurs
+        ← Retour à mon profil
       </Link>
 
       {!vendeur && (
@@ -163,7 +163,7 @@ export default async function VendeurProfile({ params }) {
 
                   <div className="flex items-center justify-between">
                     <span className="text-xl font-bold text-gray-900">
-                      {listing.prix.toFixed(2)} €
+                      {listing.prix.toFixed(2)} € HT
                     </span>
                     <Link
                       href={`/boutique/${listing.id}`}
@@ -221,7 +221,7 @@ export default async function VendeurProfile({ params }) {
         </section>
       )}
 
-      <RatingForm sellerId={id} sellerName={displayName} />
+      {/* Les avis se déposent uniquement depuis la page commande */}
     </PageContainer>
   );
 }

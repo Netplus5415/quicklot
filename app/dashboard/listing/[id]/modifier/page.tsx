@@ -36,6 +36,7 @@ export default function ModifierListing() {
 
   const [authLoading, setAuthLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [stripeStatus, setStripeStatus] = useState<string | null>(null);
   const [form, setForm] = useState<ListingData>({
     titre: "",
     description: "",
@@ -70,6 +71,15 @@ export default function ModifierListing() {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) { router.replace("/connexion"); return; }
         setUserId(user.id);
+
+        const { data: profile } = await supabase
+          .from("users")
+          .select("stripe_account_status")
+          .eq("id", user.id)
+          .maybeSingle();
+        setStripeStatus(
+          (profile as { stripe_account_status?: string | null } | null)?.stripe_account_status ?? null
+        );
 
         const [{ data: listing, error: listingError }, { data: photos }] = await Promise.all([
           supabase
@@ -353,6 +363,40 @@ export default function ModifierListing() {
           Mettez à jour les informations de votre listing.
         </p>
 
+        {stripeStatus !== "active" && (
+          <div
+            style={{
+              backgroundColor: "#fff7ed",
+              border: "1px solid #FF7D07",
+              borderRadius: "12px",
+              padding: "1.25rem 1.5rem",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <p style={{ color: "#111827", fontSize: "1rem", fontWeight: "700", margin: "0 0 0.4rem 0" }}>
+              💳 Compte de paiement non activé
+            </p>
+            <p style={{ color: "#6b7280", fontSize: "0.9rem", margin: "0 0 1rem 0", lineHeight: "1.5" }}>
+              Vous devez activer votre compte Stripe Connect avant de pouvoir vendre sur Quicklot.
+            </p>
+            <Link
+              href="/dashboard/profil"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#FF7D07",
+                color: "#ffffff",
+                textDecoration: "none",
+                padding: "0.55rem 1.25rem",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                fontWeight: "600",
+              }}
+            >
+              Activer mon compte →
+            </Link>
+          </div>
+        )}
+
         {message && (
           <div style={{
             padding: "0.75rem 1rem", borderRadius: "8px", marginBottom: "1.25rem", fontSize: "0.9rem",
@@ -396,6 +440,9 @@ export default function ModifierListing() {
           <div style={fieldStyle}>
             <label htmlFor="prix" style={labelStyle}>Prix (€)</label>
             <input id="prix" name="prix" type="number" min="0" step="0.01" value={form.prix} onChange={handleChange} required style={inputStyle} />
+            <p style={{ fontSize: "0.75rem", color: "#6b7280", marginTop: "4px" }}>
+              Prix hors taxes (HT). La TVA sera calculée automatiquement.
+            </p>
           </div>
 
           {/* ── Photos ── */}

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { sendEmail, escapeHtml } from "@/lib/email";
 import { ADMIN_NOTIFY_EMAIL } from "@/lib/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session invalide." }, { status: 401 });
     }
 
-    const body = (await request.json()) as { userId?: string };
-    if (!body.userId) {
-      return NextResponse.json({ error: "userId requis." }, { status: 400 });
-    }
+    const BodySchema = z.object({ userId: z.string() });
+    const body = BodySchema.parse(await request.json());
     if (body.userId !== authUser.id) {
       return NextResponse.json(
         { error: "userId non autorisé." },
