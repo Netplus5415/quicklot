@@ -53,8 +53,8 @@ const STATS: { icon: ReactNode; value: string; description: string }[] = [
   },
   {
     icon: <CardIcon />,
-    value: "Paiement protégé jusqu'à livraison",
-    description: "Les fonds sont bloqués tant que vous n'avez pas reçu le lot.",
+    value: "Paiement sécurisé par Stripe",
+    description: "Paiement sécurisé par Stripe.",
   },
   {
     icon: <UsersIcon />,
@@ -78,7 +78,7 @@ const STEPS = [
     num: "3",
     title: "Expédiez et soyez payé",
     description:
-      "Une fois la livraison confirmée, les fonds vous sont reversés.",
+      "Une fois la livraison confirmée, la transaction est finalisée.",
   },
 ];
 
