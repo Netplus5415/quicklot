@@ -78,6 +78,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Empêcher l'auto-achat (avant le verrou pour ne pas bloquer le listing) ──
+    if (listing.seller_id === buyerId) {
+      return NextResponse.json(
+        { error: "Vous ne pouvez pas acheter votre propre listing." },
+        { status: 400 }
+      );
+    }
+
     // ── Verrou optimiste : pending_payment ──
     const { data: locked, error: lockErr } = await supabaseAdmin
       .from("listings")
@@ -93,14 +101,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Ce listing vient d'être verrouillé par un autre acheteur." },
         { status: 409 }
-      );
-    }
-
-    // ── Empêcher l'auto-achat ──
-    if (listing.seller_id === buyerId) {
-      return NextResponse.json(
-        { error: "Vous ne pouvez pas acheter votre propre listing." },
-        { status: 400 }
       );
     }
 
@@ -227,24 +227,36 @@ export async function POST(request: NextRequest) {
       shipping_mode: shippingChoice,
     };
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      automatic_tax: { enabled: true },
-      customer_creation: "always",
-      tax_id_collection: { enabled: true },
-      line_items: lineItems,
-      success_url: `${origin}/achat/succes?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/boutique/${listingId}`,
-      metadata,
-      payment_intent_data: {
-        application_fee_amount: applicationFeeCents,
-        transfer_data: {
-          destination: sellerStripeAccountId,
-        },
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        payment_method_types: ["card"],
+        automatic_tax: { enabled: true },
+        customer_creation: "always",
+        tax_id_collection: { enabled: true },
+        line_items: lineItems,
+        success_url: `${origin}/achat/succes?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/boutique/${listingId}`,
         metadata,
-      },
-    });
+        payment_intent_data: {
+          application_fee_amount: applicationFeeCents,
+          transfer_data: {
+            destination: sellerStripeAccountId,
+          },
+          metadata,
+        },
+      });
+    } catch (stripeErr) {
+      console.error("[create-checkout-session] Stripe session creation failed, releasing lock:", stripeErr);
+      await supabaseAdmin
+        .from("listings")
+        .update({ status: "active", pending_until: null })
+        .eq("id", listingId)
+        .eq("status", "pending_payment");
+      const msg = stripeErr instanceof Error ? stripeErr.message : "Erreur Stripe";
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
