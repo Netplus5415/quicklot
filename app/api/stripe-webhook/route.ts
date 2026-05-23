@@ -8,6 +8,7 @@ import {
   templateNotificationVendeur,
 } from "@/lib/email";
 import { COMMISSION_RATE } from "@/lib/constants";
+import { sendPurchaseCapiEvent } from "@/lib/meta-capi";
 
 export const dynamic = "force-dynamic";
 
@@ -157,6 +158,20 @@ async function processCompletedCheckout(
     }
   } catch (emailErr) {
     console.error("[stripe-webhook] email notification error:", emailErr);
+  }
+
+  try {
+    const buyerEmail =
+      session.customer_details?.email ?? session.customer_email ?? null;
+    await sendPurchaseCapiEvent({
+      value: amount,
+      currency: (session.currency ?? "eur").toUpperCase(),
+      contentIds: [listingId],
+      eventId: session.id,
+      email: buyerEmail,
+    });
+  } catch (capiErr) {
+    console.error("[stripe-webhook] CAPI error:", capiErr);
   }
 
   return { ok: true };

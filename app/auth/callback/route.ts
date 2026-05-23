@@ -67,7 +67,9 @@ export async function GET(request: NextRequest) {
     console.error("[auth/callback] users lookup error:", existingErr);
   }
 
-  if (!existing) {
+  const isNewUser = !existing;
+
+  if (isNewUser) {
     const { error: insertErr } = await supabaseAdmin.from("users").insert({
       id: user.id,
       email: user.email,
@@ -96,5 +98,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/dashboard`);
+  const redirectUrl = new URL(`${origin}/dashboard`);
+  if (isNewUser) redirectUrl.searchParams.set("welcome", "1");
+  return NextResponse.redirect(redirectUrl);
 }

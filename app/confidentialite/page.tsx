@@ -155,6 +155,17 @@ export default function Confidentialite() {
             fonctionnement du site et des cookies tiers déposés par Stripe
             dans le cadre du traitement des paiements.
           </p>
+          <p style={{ margin: "0 0 1rem 0" }}>
+            Avec ton consentement préalable, Quicklot dépose également des
+            cookies de mesure d&apos;audience via le pixel Meta (Facebook /
+            Instagram), afin de mesurer l&apos;usage du site, optimiser ses
+            campagnes publicitaires et construire des audiences. Aucune donnée
+            n&apos;est transmise à Meta tant que tu n&apos;as pas accepté ces
+            cookies dans le bandeau de consentement. Tu peux retirer ton
+            consentement à tout moment en supprimant le cookie
+            <code> quicklot_consent</code> dans ton navigateur — le bandeau
+            réapparaîtra à ta prochaine visite.
+          </p>
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { PageContainer, Input, Badge, EmptyState } from "@/components/ui";
 import { CATEGORIES } from "@/lib/categories";
+import { track, trackCustom } from "@/lib/meta-pixel";
 
 interface Listing {
   id: string;
@@ -36,6 +37,8 @@ export default function Boutique() {
     const t = setTimeout(() => {
       setSearchActive(searchInput);
       setPage(1);
+      const term = searchInput.trim();
+      if (term) track("Search", { search_string: term });
     }, 400);
     return () => clearTimeout(t);
   }, [searchInput]);
@@ -255,6 +258,15 @@ export default function Boutique() {
                     </span>
                     <Link
                       href={`/boutique/${listing.id}`}
+                      onClick={() =>
+                        trackCustom("LotClicked", {
+                          content_ids: [listing.id],
+                          content_name: listing.titre,
+                          content_category: listing.categorie ?? undefined,
+                          value: listing.prix,
+                          currency: "EUR",
+                        })
+                      }
                       className="rounded-lg bg-[#FF7D07] px-4 py-2 text-sm font-semibold text-white no-underline transition-colors hover:bg-[#e56c00]"
                     >
                       Voir
