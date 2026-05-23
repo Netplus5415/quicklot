@@ -42,9 +42,8 @@ export default function ConsentBanner() {
       }}
     >
       <p style={{ margin: "0 0 1rem 0" }}>
-        Quicklot utilise des cookies de mesure d&apos;audience (Meta Pixel) pour
-        comprendre l&apos;usage du site et améliorer ses campagnes. Tu peux
-        refuser sans impact sur la navigation.{" "}
+        Pour améliorer votre expérience sur Quicklot, nous utilisons des
+        cookies de mesure d&apos;audience.{" "}
         <Link
           href="/confidentialite"
           style={{ color: "#FF7D07", textDecoration: "underline" }}

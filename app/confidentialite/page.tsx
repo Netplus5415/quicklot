@@ -156,15 +156,15 @@ export default function Confidentialite() {
             dans le cadre du traitement des paiements.
           </p>
           <p style={{ margin: "0 0 1rem 0" }}>
-            Avec ton consentement préalable, Quicklot dépose également des
+            Avec votre consentement préalable, Quicklot dépose également des
             cookies de mesure d&apos;audience via le pixel Meta (Facebook /
             Instagram), afin de mesurer l&apos;usage du site, optimiser ses
             campagnes publicitaires et construire des audiences. Aucune donnée
-            n&apos;est transmise à Meta tant que tu n&apos;as pas accepté ces
-            cookies dans le bandeau de consentement. Tu peux retirer ton
-            consentement à tout moment en supprimant le cookie
-            <code> quicklot_consent</code> dans ton navigateur — le bandeau
-            réapparaîtra à ta prochaine visite.
+            n&apos;est transmise à Meta tant que vous n&apos;avez pas accepté
+            ces cookies dans le bandeau de consentement. Vous pouvez retirer
+            votre consentement à tout moment en supprimant le cookie
+            <code> quicklot_consent</code> dans votre navigateur — le bandeau
+            réapparaîtra à votre prochaine visite.
           </p>
         </div>
       </div>
