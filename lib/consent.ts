@@ -21,6 +21,7 @@ export function readConsent(): ConsentValue | null {
 
 export function writeConsent(value: ConsentValue): void {
   if (typeof document === "undefined") return;
-  document.cookie = `${COOKIE_NAME}=${value}; path=/; max-age=${MAX_AGE_SECONDS}; samesite=lax`;
+  const secure = process.env.NODE_ENV === "production" ? "; secure" : "";
+  document.cookie = `${COOKIE_NAME}=${value}; path=/; max-age=${MAX_AGE_SECONDS}; samesite=lax${secure}`;
   window.dispatchEvent(new CustomEvent<ConsentValue>(CONSENT_EVENT, { detail: value }));
 }
