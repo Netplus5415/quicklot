@@ -240,7 +240,7 @@ export default function NouveauListing() {
       console.error("[nouveau listing] admin notify error:", err);
     }
 
-    trackCustom("LotPublished", {
+    trackCustom("LotSubmitted", {
       content_ids: [listingData.id],
       content_name: form.titre,
       content_category: form.categorie,
