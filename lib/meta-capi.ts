@@ -53,10 +53,13 @@ export async function sendPurchaseCapiEvent(
     },
   };
 
-  const body: Record<string, unknown> = { data: [event] };
+  const body: Record<string, unknown> = {
+    data: [event],
+    access_token: accessToken,
+  };
   if (testEventCode) body.test_event_code = testEventCode;
 
-  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${pixelId}/events?access_token=${encodeURIComponent(accessToken)}`;
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${pixelId}/events`;
 
   try {
     const res = await fetch(url, {
