@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { readConsent, writeConsent, type ConsentValue } from "@/lib/consent";
+import {
+  CONSENT_OPEN_EVENT,
+  readConsent,
+  writeConsent,
+  type ConsentValue,
+} from "@/lib/consent";
 
 export default function ConsentBanner() {
   const [visible, setVisible] = useState(false);
@@ -10,6 +15,9 @@ export default function ConsentBanner() {
 
   useEffect(() => {
     setVisible(readConsent() === null);
+    const onOpen = () => setVisible(true);
+    window.addEventListener(CONSENT_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(CONSENT_OPEN_EVENT, onOpen);
   }, []);
 
   if (!visible) return null;

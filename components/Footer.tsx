@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { openConsentBanner } from "@/lib/consent";
 
 const IG_COLOR = "#E1306C";
 const IG_HOVER = "#b82458";
@@ -62,6 +63,22 @@ export default function Footer() {
             {l.label}
           </Link>
         ))}
+        <button
+          type="button"
+          onClick={openConsentBanner}
+          style={{
+            color: "#6b7280",
+            fontSize: "0.75rem",
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            textDecoration: "underline",
+          }}
+        >
+          Gérer mes cookies
+        </button>
       </div>
 
       <div

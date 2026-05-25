@@ -4,6 +4,12 @@ const COOKIE_NAME = "quicklot_consent";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 390;
 
 export const CONSENT_EVENT = "quicklot:consent-changed";
+export const CONSENT_OPEN_EVENT = "quicklot:consent-open";
+
+export function openConsentBanner(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(CONSENT_OPEN_EVENT));
+}
 
 export function readConsent(): ConsentValue | null {
   if (typeof document === "undefined") return null;

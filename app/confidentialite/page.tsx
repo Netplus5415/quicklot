@@ -161,10 +161,9 @@ export default function Confidentialite() {
             Instagram), afin de mesurer l&apos;usage du site, optimiser ses
             campagnes publicitaires et construire des audiences. Aucune donnée
             n&apos;est transmise à Meta tant que vous n&apos;avez pas accepté
-            ces cookies dans le bandeau de consentement. Vous pouvez retirer
-            votre consentement à tout moment en supprimant le cookie
-            <code> quicklot_consent</code> dans votre navigateur — le bandeau
-            réapparaîtra à votre prochaine visite.
+            ces cookies dans le bandeau de consentement. Vous pouvez modifier
+            ou retirer votre consentement à tout moment en cliquant sur
+            «&nbsp;Gérer mes cookies&nbsp;» en bas de chaque page.
           </p>
         </div>
       </div>
