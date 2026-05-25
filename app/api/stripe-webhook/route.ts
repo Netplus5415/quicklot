@@ -160,18 +160,28 @@ async function processCompletedCheckout(
     console.error("[stripe-webhook] email notification error:", emailErr);
   }
 
-  try {
-    const buyerEmail =
-      session.customer_details?.email ?? session.customer_email ?? null;
-    await sendPurchaseCapiEvent({
-      value: amount,
-      currency: (session.currency ?? "eur").toUpperCase(),
-      contentIds: [listingId],
-      eventId: session.id,
-      email: buyerEmail,
-    });
-  } catch (capiErr) {
-    console.error("[stripe-webhook] CAPI error:", capiErr);
+  const consentMeta = metadata.consent_meta;
+  if (consentMeta === "granted") {
+    try {
+      const buyerEmail =
+        session.customer_details?.email ?? session.customer_email ?? null;
+      await sendPurchaseCapiEvent({
+        value: amount,
+        currency: (session.currency ?? "eur").toUpperCase(),
+        contentIds: [listingId],
+        eventId: session.id,
+        email: buyerEmail,
+      });
+    } catch (capiErr) {
+      console.error("[stripe-webhook] CAPI error:", capiErr);
+    }
+  } else {
+    console.log(
+      "[stripe-webhook] CAPI skipped: consent_meta=",
+      consentMeta ?? "missing",
+      "session:",
+      session.id
+    );
   }
 
   return { ok: true };

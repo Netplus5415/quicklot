@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { COMMISSION_RATE } from "@/lib/constants";
 import { z } from "zod";
+
+type ConsentMeta = "granted" | "denied" | "unknown";
+
+async function readConsentMeta(): Promise<ConsentMeta> {
+  const store = await cookies();
+  const raw = store.get("quicklot_consent")?.value;
+  return raw === "granted" || raw === "denied" ? raw : "unknown";
+}
 
 export const dynamic = "force-dynamic";
 
@@ -216,6 +225,8 @@ export async function POST(request: NextRequest) {
         : []),
     ];
 
+    const consentMeta = await readConsentMeta();
+
     const metadata = {
       listingId: listing.id,
       buyerId,
@@ -225,6 +236,7 @@ export async function POST(request: NextRequest) {
       seller_amount: (sellerAmountCents / 100).toFixed(2),
       prix_ht: (prixHtCents / 100).toFixed(2),
       shipping_mode: shippingChoice,
+      consent_meta: consentMeta,
     };
 
     let session: Stripe.Checkout.Session;
