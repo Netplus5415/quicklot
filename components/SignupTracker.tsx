@@ -3,6 +3,10 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { track, trackCustom } from "@/lib/meta-pixel";
+import { CONSENT_EVENT, readConsent, type ConsentValue } from "@/lib/consent";
+
+const FBQ_POLL_INTERVAL_MS = 200;
+const FBQ_POLL_TIMEOUT_MS = 10_000;
 
 export default function SignupTracker() {
   const router = useRouter();
@@ -14,7 +18,22 @@ export default function SignupTracker() {
     if (fired.current) return;
     if (searchParams.get("welcome") !== "1") return;
 
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let pollDeadline: ReturnType<typeof setTimeout> | null = null;
+
+    function stopPolling(): void {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (pollDeadline) {
+        clearTimeout(pollDeadline);
+        pollDeadline = null;
+      }
+    }
+
     function fire(): boolean {
+      if (fired.current) return true;
       if (typeof window === "undefined" || !window.fbq) return false;
       fired.current = true;
       track("CompleteRegistration");
@@ -22,20 +41,35 @@ export default function SignupTracker() {
 
       const next = new URLSearchParams(searchParams.toString());
       next.delete("welcome");
-      const newUrl = next.toString() ? `${pathname}?${next.toString()}` : pathname;
+      const newUrl = next.toString()
+        ? `${pathname}?${next.toString()}`
+        : pathname;
       router.replace(newUrl);
       return true;
     }
 
-    if (fire()) return;
+    function attempt(): void {
+      if (fired.current) return;
+      if (readConsent() !== "granted") return;
+      if (fire()) return;
+      if (pollTimer) return;
+      pollTimer = setInterval(() => {
+        if (fire()) stopPolling();
+      }, FBQ_POLL_INTERVAL_MS);
+      pollDeadline = setTimeout(stopPolling, FBQ_POLL_TIMEOUT_MS);
+    }
 
-    const interval = setInterval(() => {
-      if (fire()) clearInterval(interval);
-    }, 300);
-    const timeout = setTimeout(() => clearInterval(interval), 5000);
+    attempt();
+
+    const onConsent = (e: Event) => {
+      const detail = (e as CustomEvent<ConsentValue>).detail;
+      if (detail === "granted") attempt();
+    };
+    window.addEventListener(CONSENT_EVENT, onConsent);
+
     return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
+      window.removeEventListener(CONSENT_EVENT, onConsent);
+      stopPolling();
     };
   }, [searchParams, pathname, router]);
 
