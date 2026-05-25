@@ -43,7 +43,7 @@ export default function ConsentBanner() {
         padding: "1.25rem",
         borderRadius: "12px",
         boxShadow: "0 10px 25px -5px rgba(0,0,0,0.3)",
-        zIndex: 9999,
+        zIndex: 100,
         fontFamily: "sans-serif",
         fontSize: "0.875rem",
         lineHeight: 1.5,
