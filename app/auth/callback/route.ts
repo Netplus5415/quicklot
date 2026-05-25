@@ -64,7 +64,11 @@ export async function GET(request: NextRequest) {
     .maybeSingle();
 
   if (existingErr) {
-    console.error("[auth/callback] users lookup error:", existingErr);
+    console.error(
+      "[auth/callback] users lookup error — skipping insert and welcome flag:",
+      existingErr
+    );
+    return NextResponse.redirect(`${origin}/dashboard`);
   }
 
   const isNewUser = !existing;
