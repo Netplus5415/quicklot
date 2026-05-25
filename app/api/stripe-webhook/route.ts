@@ -165,12 +165,18 @@ async function processCompletedCheckout(
     try {
       const buyerEmail =
         session.customer_details?.email ?? session.customer_email ?? null;
+      const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.quicklot.fr";
+      const eventSourceUrl = session.success_url
+        ? session.success_url.replace("{CHECKOUT_SESSION_ID}", session.id)
+        : `${siteUrl}/achat/succes?session_id=${session.id}`;
       await sendPurchaseCapiEvent({
         value: amount,
         currency: (session.currency ?? "eur").toUpperCase(),
         contentIds: [listingId],
         eventId: session.id,
         email: buyerEmail,
+        eventSourceUrl,
       });
     } catch (capiErr) {
       console.error("[stripe-webhook] CAPI error:", capiErr);

@@ -42,7 +42,8 @@ export async function sendPurchaseCapiEvent(
     event_id: input.eventId,
     action_source: "website" as const,
     event_source_url:
-      input.eventSourceUrl ?? "https://www.quicklot.fr/achat/succes",
+      input.eventSourceUrl ??
+      `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.quicklot.fr"}/achat/succes`,
     user_data: userData,
     custom_data: {
       value: input.value,
