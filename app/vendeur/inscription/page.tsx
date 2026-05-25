@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { track, trackCustom } from "@/lib/meta-pixel";
 
 export default function InscriptionVendeur() {
   const [form, setForm] = useState({
@@ -111,6 +112,10 @@ export default function InscriptionVendeur() {
         return;
       }
     }
+
+    track("Lead", { content_category: typeVendeur });
+    track("CompleteRegistration");
+    trackCustom("SellerSignupCompleted", { content_category: typeVendeur });
 
     setMessage({ text: "Compte créé ! Vérifie ton email.", error: false });
     setLoading(false);

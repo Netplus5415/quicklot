@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { PageContainer, Badge, Button } from "@/components/ui";
+import { track, trackCustom } from "@/lib/meta-pixel";
 
 interface Listing {
   id: string;
@@ -84,6 +85,15 @@ export default function ListingDetail() {
 
         setListing(listingData);
 
+        track("ViewContent", {
+          content_ids: [listingData.id],
+          content_name: listingData.titre,
+          content_category: listingData.categorie ?? undefined,
+          content_type: "product",
+          value: listingData.prix,
+          currency: "EUR",
+        });
+
         const available: ShippingChoice[] = [];
         if (listingData.enlevement_sur_place) available.push("enlevement");
         if (listingData.livraison_france) available.push("france");
@@ -131,6 +141,21 @@ export default function ListingDetail() {
     if (!listing || !shippingChoice) return;
     setOrderLoading(true);
     setOrderMessage(null);
+
+    trackCustom("LotPurchaseStarted", {
+      content_ids: [listing.id],
+      content_name: listing.titre,
+      content_category: listing.categorie ?? undefined,
+      value: listing.prix,
+      currency: "EUR",
+    });
+    track("InitiateCheckout", {
+      content_ids: [listing.id],
+      content_type: "product",
+      value: listing.prix,
+      currency: "EUR",
+      num_items: 1,
+    });
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session) {
@@ -439,6 +464,10 @@ export default function ListingDetail() {
         className="mb-3"
         onClick={async () => {
           if (isSold) return;
+          trackCustom("SellerContactClicked", {
+            content_ids: [listing.id],
+            content_name: listing.titre,
+          });
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) {
             window.location.href = `/connexion?redirect=${encodeURIComponent(`/boutique/${listing.id}`)}`;

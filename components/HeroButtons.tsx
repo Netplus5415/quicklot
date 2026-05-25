@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { trackCustom } from "@/lib/meta-pixel";
 
 export default function HeroButtons() {
   const [connected, setConnected] = useState<boolean | null>(null);
@@ -39,6 +40,7 @@ export default function HeroButtons() {
   return (
     <Link
       href="/vendeur/inscription"
+      onClick={() => trackCustom("SellerSignupStarted")}
       style={{
         display: "inline-block",
         backgroundColor: "#FF7D07",

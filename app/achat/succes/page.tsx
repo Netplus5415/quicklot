@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import Stripe from "stripe";
+import PurchaseTracker from "@/components/PurchaseTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,7 @@ export default async function AchatSucces({
 
   const { data: order } = await supabaseAdmin
     .from("orders")
-    .select("id")
+    .select("id, listing_id")
     .eq("stripe_session_id", session_id)
     .maybeSingle();
 
@@ -99,22 +100,43 @@ export default async function AchatSucces({
     );
   }
 
+  const purchaseValue = stripeSession.amount_total != null
+    ? stripeSession.amount_total / 100
+    : null;
+  const purchaseCurrency = (stripeSession.currency ?? "eur").toUpperCase();
+  const listingId = (order as { id: string; listing_id?: string | null }).listing_id ?? null;
+  const tracker =
+    purchaseValue != null && listingId ? (
+      <PurchaseTracker
+        value={purchaseValue}
+        currency={purchaseCurrency}
+        contentIds={[listingId]}
+        eventId={session_id}
+      />
+    ) : null;
+
   if (emailMismatch) {
     return (
-      <SuccessLayout
-        message="Paiement confirmé"
-        subtitle="Attention : l'email de paiement ne correspond pas à votre compte connecté."
-        sessionId={session_id}
-      />
+      <>
+        {tracker}
+        <SuccessLayout
+          message="Paiement confirmé"
+          subtitle="Attention : l'email de paiement ne correspond pas à votre compte connecté."
+          sessionId={session_id}
+        />
+      </>
     );
   }
 
   return (
-    <SuccessLayout
-      message="Paiement confirmé"
-      subtitle="Merci pour votre achat ! Le vendeur a été notifié et vous contactera prochainement pour la suite de la transaction."
-      sessionId={session_id}
-    />
+    <>
+      {tracker}
+      <SuccessLayout
+        message="Paiement confirmé"
+        subtitle="Merci pour votre achat ! Le vendeur a été notifié et vous contactera prochainement pour la suite de la transaction."
+        sessionId={session_id}
+      />
+    </>
   );
 }
 

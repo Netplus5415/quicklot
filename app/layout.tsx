@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import MetaPixel from "@/components/MetaPixel";
+import ConsentBanner from "@/components/ConsentBanner";
+import SignupTracker from "@/components/SignupTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +38,11 @@ export default function RootLayout({
         <Navigation />
         <div style={{ paddingTop: "56px" }}>{children}</div>
         <Footer />
+        <MetaPixel />
+        <ConsentBanner />
+        <Suspense fallback={null}>
+          <SignupTracker />
+        </Suspense>
       </body>
     </html>
   );

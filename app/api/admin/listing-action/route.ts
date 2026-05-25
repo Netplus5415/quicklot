@@ -4,6 +4,7 @@ import { z } from "zod";
 import { isAdminUser } from "@/lib/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendEmail, templateListingApprouve, templateListingRefuse } from "@/lib/email";
+import { sendLotPublishedCapiEvent } from "@/lib/meta-capi";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const { data: listing, error: listingErr } = await supabaseAdmin
       .from("listings")
-      .select("id, seller_id, titre")
+      .select("id, seller_id, titre, categorie, prix")
       .eq("id", body.listing_id)
       .single();
 
@@ -58,6 +59,14 @@ export async function POST(request: NextRequest) {
 
     const sellerId = (listing as { seller_id: string }).seller_id;
     const titre = (listing as { titre: string }).titre;
+    const categorie = (listing as { categorie?: string | null }).categorie ?? undefined;
+    const prixRaw = (listing as { prix?: number | string | null }).prix;
+    const prix =
+      typeof prixRaw === "number"
+        ? prixRaw
+        : typeof prixRaw === "string"
+          ? parseFloat(prixRaw)
+          : undefined;
 
     if (body.action === "approve") {
       const { error } = await supabaseAdmin
@@ -82,6 +91,19 @@ export async function POST(request: NextRequest) {
         }
       } catch (err) {
         console.error("[admin/listing-action] email error:", err);
+      }
+
+      try {
+        await sendLotPublishedCapiEvent({
+          listingId: body.listing_id,
+          eventId: `listing-approved:${body.listing_id}`,
+          contentName: titre,
+          contentCategory: categorie,
+          value: Number.isFinite(prix) ? prix : undefined,
+          currency: Number.isFinite(prix) ? "EUR" : undefined,
+        });
+      } catch (err) {
+        console.error("[admin/listing-action] LotPublished CAPI error:", err);
       }
     } else if (body.action === "reject") {
       if (!body.note?.trim()) {

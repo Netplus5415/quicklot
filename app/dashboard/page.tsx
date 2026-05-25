@@ -395,7 +395,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="mb-1 text-3xl font-bold text-gray-900">Bonjour {prenom} 👋</h1>
+          <h1 className="mb-1 text-3xl font-bold text-gray-900">Bonjour {prenom}</h1>
           <p className="text-base text-gray-500">Voici un aperçu de votre activité.</p>
         </div>
         <Button

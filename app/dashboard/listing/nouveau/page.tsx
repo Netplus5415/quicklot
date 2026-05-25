@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { CATEGORIES } from "@/lib/categories";
+import { trackCustom } from "@/lib/meta-pixel";
 
 export default function NouveauListing() {
   const router = useRouter();
@@ -238,6 +239,14 @@ export default function NouveauListing() {
     } catch (err) {
       console.error("[nouveau listing] admin notify error:", err);
     }
+
+    trackCustom("LotSubmitted", {
+      content_ids: [listingData.id],
+      content_name: form.titre,
+      content_category: form.categorie,
+      value: parseFloat(form.prix),
+      currency: "EUR",
+    });
 
     setMessage({
       text: "Listing soumis ! Il sera visible après validation par notre équipe (sous 24h).",
