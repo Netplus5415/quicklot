@@ -16,6 +16,7 @@ export default function SignupTracker() {
 
   useEffect(() => {
     if (fired.current) return;
+    if (!pathname.startsWith("/dashboard")) return;
     if (searchParams.get("welcome") !== "1") return;
 
     let pollTimer: ReturnType<typeof setInterval> | null = null;
