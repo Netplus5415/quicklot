@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { addToMarketingList } from "@/lib/brevo-contacts";
+import { sanitizeAttribution } from "@/lib/attribution";
 
 export const dynamic = "force-dynamic";
 
@@ -51,15 +53,25 @@ export async function GET(request: NextRequest) {
     name?: string | null;
     avatar_url?: string | null;
     picture?: string | null;
+    prenom?: string | null;
+    seller_profile?: {
+      prenom?: string | null;
+      pseudo?: string | null;
+      nom_entreprise?: string | null;
+      type_vendeur?: "amazon" | "destockeur" | null;
+      marketing_opt_in?: boolean | null;
+    } | null;
+    attribution?: unknown;
   };
+  const sellerProfile = meta.seller_profile ?? null;
   const prenom =
-    meta.given_name ?? meta.full_name ?? meta.name ?? null;
+    sellerProfile?.prenom ?? meta.prenom ?? meta.given_name ?? meta.full_name ?? meta.name ?? null;
   const avatar_url = meta.avatar_url ?? meta.picture ?? null;
-  const pseudo = null;
+  const pseudo = sellerProfile?.pseudo ?? null;
 
   const { data: existing, error: existingErr } = await supabaseAdmin
     .from("users")
-    .select("id, pseudo, avatar_url, marketing_opt_in_at, marketing_unsubscribed_at")
+    .select("id, prenom, pseudo, avatar_url, nom_entreprise, type_vendeur, marketing_opt_in_at, marketing_unsubscribed_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -71,6 +83,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/dashboard`);
   }
 
+  const marketingOptIn = sellerProfile?.marketing_opt_in === true;
+  const marketingOptInAt = marketingOptIn ? new Date().toISOString() : null;
+
   if (!existing) {
     const { error: insertErr } = await supabaseAdmin.from("users").insert({
       id: user.id,
@@ -81,14 +96,34 @@ export async function GET(request: NextRequest) {
       role: "seller",
       kyc_status: null,
       stripe_account_status: "none",
+      nom_entreprise: sellerProfile?.nom_entreprise ?? null,
+      type_vendeur: sellerProfile?.type_vendeur ?? null,
+      marketing_opt_in: marketingOptIn,
+      marketing_opt_in_at: marketingOptInAt,
     });
 
     if (insertErr) {
       console.error("[auth/callback] profile insert error:", insertErr);
     }
   } else {
-    const updates: Record<string, string> = {};
+    const updates: Record<string, string | boolean | null> = {};
+    if (!existing.prenom && prenom) updates.prenom = prenom;
+    if (!existing.pseudo && pseudo) updates.pseudo = pseudo;
     if (!existing.avatar_url && avatar_url) updates.avatar_url = avatar_url;
+    if (!existing.nom_entreprise && sellerProfile?.nom_entreprise) {
+      updates.nom_entreprise = sellerProfile.nom_entreprise;
+    }
+    if (!existing.type_vendeur && sellerProfile?.type_vendeur) {
+      updates.type_vendeur = sellerProfile.type_vendeur;
+    }
+    if (
+      marketingOptIn &&
+      existing.marketing_opt_in_at === null &&
+      existing.marketing_unsubscribed_at === null
+    ) {
+      updates.marketing_opt_in = true;
+      updates.marketing_opt_in_at = marketingOptInAt;
+    }
     if (Object.keys(updates).length > 0) {
       const { error: patchErr } = await supabaseAdmin
         .from("users")
@@ -100,10 +135,36 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const attribution = sanitizeAttribution(meta.attribution);
+  if (attribution) {
+    const { error: attributionError } = await supabaseAdmin
+      .from("user_attributions")
+      .upsert(
+        {
+          user_id: user.id,
+          email: user.email ?? null,
+          ...attribution,
+        },
+        { onConflict: "user_id" }
+      );
+
+    if (attributionError) {
+      console.error("[auth/callback] attribution upsert error:", attributionError);
+    }
+  }
+
+  if (marketingOptIn && user.email) {
+    const brevoRes = await addToMarketingList(user.email, prenom ?? "");
+    if (!brevoRes.ok) {
+      console.error("[auth/callback] brevo sync failed:", brevoRes.error);
+    }
+  }
+
   const consentNotYetAnswered =
-    !existing ||
-    (existing.marketing_opt_in_at === null &&
-      existing.marketing_unsubscribed_at === null);
+    !marketingOptIn &&
+    (!existing ||
+      (existing.marketing_opt_in_at === null &&
+        existing.marketing_unsubscribed_at === null));
 
   if (consentNotYetAnswered) {
     return NextResponse.redirect(`${origin}/bienvenue`);

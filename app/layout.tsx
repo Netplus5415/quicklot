@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import MetaPixel from "@/components/MetaPixel";
 import ConsentBanner from "@/components/ConsentBanner";
 import SignupTracker from "@/components/SignupTracker";
+import AttributionTracker from "@/components/AttributionTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
         <Footer />
         <MetaPixel />
         <ConsentBanner />
+        <AttributionTracker />
         <Suspense fallback={null}>
           <SignupTracker />
         </Suspense>

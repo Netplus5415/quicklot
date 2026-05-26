@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { addToMarketingList } from "@/lib/brevo-contacts";
+import { sanitizeAttribution } from "@/lib/attribution";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ const Body = z.object({
   type_vendeur: z.enum(["amazon", "destockeur"]),
   prenom: z.string(),
   marketing_opt_in: z.boolean().optional().default(false),
+  attribution: z.unknown().optional().nullable(),
 });
 
 export async function POST(request: NextRequest) {
@@ -79,6 +81,24 @@ export async function POST(request: NextRequest) {
     if (upsertError) {
       console.error("[users/setup] upsert error:", upsertError);
       return NextResponse.json({ error: upsertError.message }, { status: 500 });
+    }
+
+    const attribution = sanitizeAttribution(body.attribution);
+    if (attribution) {
+      const { error: attributionError } = await supabaseAdmin
+        .from("user_attributions")
+        .upsert(
+          {
+            user_id: body.userId,
+            email,
+            ...attribution,
+          },
+          { onConflict: "user_id" }
+        );
+
+      if (attributionError) {
+        console.error("[users/setup] attribution upsert error:", attributionError);
+      }
     }
 
     if (body.marketing_opt_in && email) {

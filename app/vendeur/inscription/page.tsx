@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { track, trackCustom } from "@/lib/meta-pixel";
+import { readStoredAttribution } from "@/lib/attribution";
 
 export default function InscriptionVendeur() {
   const [form, setForm] = useState({
@@ -61,11 +62,27 @@ export default function InscriptionVendeur() {
 
     setLoading(true);
 
+    const nomEntreprise = form.nom_entreprise.trim();
+    const prenomTrim = form.prenom.trim();
+    const attribution = readStoredAttribution();
+    const sellerProfile = {
+      prenom: prenomTrim,
+      pseudo: nomEntreprise || prenomTrim,
+      nom_entreprise: nomEntreprise,
+      type_vendeur: typeVendeur,
+      marketing_opt_in: form.marketing_opt_in,
+    };
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: form.email,
       password: form.motDePasse,
       options: {
-        data: { prenom: form.prenom },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: {
+          prenom: prenomTrim,
+          seller_profile: sellerProfile,
+          attribution,
+        },
       },
     });
 
@@ -76,35 +93,32 @@ export default function InscriptionVendeur() {
     }
 
     if (signUpData?.user) {
-      const nomEntreprise = form.nom_entreprise.trim();
-      const prenomTrim = form.prenom.trim();
       const apiPayload = {
         userId: signUpData.user.id,
-        prenom: prenomTrim,
-        pseudo: nomEntreprise || prenomTrim,
-        nom_entreprise: nomEntreprise,
-        type_vendeur: typeVendeur,
-        marketing_opt_in: form.marketing_opt_in,
+        ...sellerProfile,
+        attribution,
       };
 
       try {
         const { data: { session: newSession } } = await supabase.auth.getSession();
-        const res = await fetch("/api/users/setup", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(newSession?.access_token ? { Authorization: `Bearer ${newSession.access_token}` } : {}),
-          },
-          body: JSON.stringify(apiPayload),
-        });
-        const result = await res.json();
-        if (!res.ok) {
-          setMessage({
-            text: `Compte auth créé mais profil vendeur non enregistré : ${result.error ?? "erreur inconnue"}. Contactez le support.`,
-            error: true,
+        if (newSession?.access_token) {
+          const res = await fetch("/api/users/setup", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${newSession.access_token}`,
+            },
+            body: JSON.stringify(apiPayload),
           });
-          setLoading(false);
-          return;
+          const result = await res.json();
+          if (!res.ok) {
+            setMessage({
+              text: `Compte auth créé mais profil vendeur non enregistré : ${result.error ?? "erreur inconnue"}. Contactez le support.`,
+              error: true,
+            });
+            setLoading(false);
+            return;
+          }
         }
       } catch {
         setMessage({
