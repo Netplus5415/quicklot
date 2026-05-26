@@ -12,6 +12,7 @@ export default function InscriptionVendeur() {
     motDePasse: "",
     confirmation: "",
     nom_entreprise: "",
+    marketing_opt_in: false,
   });
   const [typeVendeur, setTypeVendeur] = useState<"amazon" | "destockeur" | "">("");
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
@@ -19,7 +20,8 @@ export default function InscriptionVendeur() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setForm({ ...form, [e.target.name]: value });
   }
 
   async function handleGoogleSignIn() {
@@ -82,6 +84,7 @@ export default function InscriptionVendeur() {
         pseudo: nomEntreprise || prenomTrim,
         nom_entreprise: nomEntreprise,
         type_vendeur: typeVendeur,
+        marketing_opt_in: form.marketing_opt_in,
       };
 
       try {
@@ -365,6 +368,40 @@ export default function InscriptionVendeur() {
               })}
             </div>
           </div>
+
+          <label
+            htmlFor="marketing_opt_in"
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.65rem",
+              color: "#4b5563",
+              fontSize: "0.875rem",
+              lineHeight: 1.45,
+              margin: "0 0 1.25rem 0",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              id="marketing_opt_in"
+              name="marketing_opt_in"
+              type="checkbox"
+              checked={form.marketing_opt_in}
+              onChange={handleChange}
+              style={{
+                width: "1rem",
+                height: "1rem",
+                marginTop: "0.1rem",
+                accentColor: "#FF7D07",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            />
+            <span>
+              J&apos;accepte de recevoir les conseils, nouveautés et opportunités
+              de lots par email. Je peux me désinscrire à tout moment.
+            </span>
+          </label>
 
           <button
             type="submit"

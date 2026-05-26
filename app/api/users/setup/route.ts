@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { addToMarketingList } from "@/lib/brevo-contacts";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ const Body = z.object({
   nom_entreprise: z.string(),
   type_vendeur: z.enum(["amazon", "destockeur"]),
   prenom: z.string(),
+  marketing_opt_in: z.boolean().optional().default(false),
 });
 
 export async function POST(request: NextRequest) {
@@ -68,6 +70,8 @@ export async function POST(request: NextRequest) {
       nom_entreprise: body.nom_entreprise.trim() || null,
       type_vendeur: body.type_vendeur,
       pseudo: body.pseudo.trim(),
+      marketing_opt_in: body.marketing_opt_in,
+      marketing_opt_in_at: body.marketing_opt_in ? new Date().toISOString() : null,
     };
 
     const { error: upsertError } = await supabaseAdmin.from("users").upsert(payload);
@@ -75,6 +79,13 @@ export async function POST(request: NextRequest) {
     if (upsertError) {
       console.error("[users/setup] upsert error:", upsertError);
       return NextResponse.json({ error: upsertError.message }, { status: 500 });
+    }
+
+    if (body.marketing_opt_in && email) {
+      const brevoRes = await addToMarketingList(email, body.prenom.trim());
+      if (!brevoRes.ok) {
+        console.error("[users/setup] brevo sync failed:", brevoRes.error);
+      }
     }
 
     return NextResponse.json({ ok: true });

@@ -102,7 +102,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const redirectUrl = new URL(`${origin}/dashboard`);
-  if (isNewUser) redirectUrl.searchParams.set("welcome", "1");
-  return NextResponse.redirect(redirectUrl);
+  if (isNewUser) {
+    return NextResponse.redirect(`${origin}/bienvenue`);
+  }
+  return NextResponse.redirect(`${origin}/dashboard`);
 }
