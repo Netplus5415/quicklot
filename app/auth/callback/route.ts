@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 
   const { data: existing, error: existingErr } = await supabaseAdmin
     .from("users")
-    .select("id, pseudo, avatar_url")
+    .select("id, pseudo, avatar_url, marketing_opt_in_at, marketing_unsubscribed_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -71,9 +71,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/dashboard`);
   }
 
-  const isNewUser = !existing;
-
-  if (isNewUser) {
+  if (!existing) {
     const { error: insertErr } = await supabaseAdmin.from("users").insert({
       id: user.id,
       email: user.email,
@@ -102,7 +100,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  if (isNewUser) {
+  const consentNotYetAnswered =
+    !existing ||
+    (existing.marketing_opt_in_at === null &&
+      existing.marketing_unsubscribed_at === null);
+
+  if (consentNotYetAnswered) {
     return NextResponse.redirect(`${origin}/bienvenue`);
   }
   return NextResponse.redirect(`${origin}/dashboard`);
