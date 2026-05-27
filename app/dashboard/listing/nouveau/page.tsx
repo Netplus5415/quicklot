@@ -70,6 +70,9 @@ export default function NouveauListing() {
 
   const isKycVerified = kycStatus === "verified";
   const isStripeActive = stripeStatus === "active";
+  // Pendant la transition : publication autorisée si KYC vérifié OU Stripe actif.
+  // L'encaissement reste protégé par Stripe active côté checkout.
+  const canPublish = isKycVerified || isStripeActive;
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -96,8 +99,12 @@ export default function NouveauListing() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isKycVerified) {
-      setMessage({ text: "Votre compte doit être vérifié avant de publier un listing.", error: true });
+    if (!canPublish) {
+      setMessage({
+        text:
+          "Activez votre compte de paiement Stripe ou faites vérifier votre profil pour publier un listing.",
+        error: true,
+      });
       return;
     }
     setMessage(null);
@@ -355,7 +362,7 @@ export default function NouveauListing() {
           Publiez un lot ou un produit sur Quicklot.
         </p>
 
-        {!isStripeActive && (
+        {!isStripeActive && !isKycVerified && (
           <div
             style={{
               backgroundColor: "#fff7ed",
@@ -366,10 +373,12 @@ export default function NouveauListing() {
             }}
           >
             <p style={{ color: "#111827", fontSize: "1rem", fontWeight: "700", margin: "0 0 0.4rem 0" }}>
-              💳 Compte de paiement non activé
+              💳 Compte de paiement requis
             </p>
             <p style={{ color: "#6b7280", fontSize: "0.9rem", margin: "0 0 1rem 0", lineHeight: "1.5" }}>
-              Vous devez activer votre compte Stripe Connect avant de pouvoir vendre sur Quicklot.
+              Activez votre compte Stripe Connect pour publier un listing et
+              encaisser vos ventes. Le badge « Vendeur vérifié Quicklot » reste
+              facultatif.
             </p>
             <Link
               href="/dashboard/profil"
@@ -389,7 +398,7 @@ export default function NouveauListing() {
           </div>
         )}
 
-        {!isKycVerified && (
+        {!isStripeActive && isKycVerified && (
           <div
             style={{
               backgroundColor: "#fff7ed",
@@ -400,17 +409,15 @@ export default function NouveauListing() {
             }}
           >
             <p style={{ color: "#111827", fontSize: "1rem", fontWeight: "700", margin: "0 0 0.4rem 0" }}>
-              🔒 Compte non vérifié
+              💳 Connectez Stripe pour encaisser
             </p>
             <p style={{ color: "#6b7280", fontSize: "0.9rem", margin: "0 0 1rem 0", lineHeight: "1.5" }}>
-              {kycStatus === "pending"
-                ? "Votre demande de vérification KYC est en cours de traitement. Vous pourrez publier des listings dès que votre compte sera vérifié."
-                : kycStatus === "rejected"
-                ? "Votre demande de vérification a été refusée. Vous pouvez soumettre une nouvelle demande depuis votre dashboard."
-                : "Votre KYC est en attente de validation. Vous pourrez publier des listings dès que votre compte sera vérifié."}
+              Votre profil est vérifié — vous pouvez publier. Il vous faudra
+              cependant activer Stripe Connect avant qu&apos;un acheteur puisse
+              régler votre annonce.
             </p>
             <Link
-              href="/dashboard"
+              href="/dashboard/profil"
               style={{
                 display: "inline-block",
                 backgroundColor: "#FF7D07",
@@ -422,7 +429,7 @@ export default function NouveauListing() {
                 fontWeight: "600",
               }}
             >
-              Vérifier mon compte →
+              Activer Stripe →
             </Link>
           </div>
         )}
@@ -444,7 +451,7 @@ export default function NouveauListing() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <fieldset disabled={!isKycVerified} style={{ border: "none", padding: 0, margin: 0, opacity: isKycVerified ? 1 : 0.5 }}>
+          <fieldset disabled={!canPublish} style={{ border: "none", padding: 0, margin: 0, opacity: canPublish ? 1 : 0.5 }}>
           <div style={fieldStyle}>
             <label htmlFor="titre" style={labelStyle}>
               Titre

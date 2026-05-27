@@ -5,28 +5,56 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { PageContainer, Button, Card, Badge, Input, Textarea } from "@/components/ui";
+import {
+  hasAllRequiredSellerFields,
+  SELLER_PROFILE_COLUMNS,
+} from "@/lib/seller-profile";
 
-interface Profile {
+interface PublicProfile {
   pseudo: string;
-  bio: string;
-  ville: string;
   avatar_url: string | null;
+}
+
+interface SellerInfo {
+  bio: string;
+  nom_entreprise: string;
+  numero_entreprise: string;
+  adresse: string;
+  code_postal: string;
+  ville: string;
+  pays: string;
 }
 
 type StripeAccountStatus = "none" | "pending" | "active";
 type StripeCountry = "FR" | "BE" | "ES" | "IT" | "LU";
+
+const EMPTY_SELLER_INFO: SellerInfo = {
+  bio: "",
+  nom_entreprise: "",
+  numero_entreprise: "",
+  adresse: "",
+  code_postal: "",
+  ville: "",
+  pays: "France",
+};
 
 export default function ProfilEdit() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Profil
-  const [profile, setProfile] = useState<Profile>({ pseudo: "", bio: "", ville: "", avatar_url: null });
+  // Identité publique (avatar + pseudo)
+  const [profile, setProfile] = useState<PublicProfile>({ pseudo: "", avatar_url: null });
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ text: string; error: boolean } | null>(null);
+
+  // Informations vendeur (séparé des docs KYC)
+  const [sellerInfo, setSellerInfo] = useState<SellerInfo>(EMPTY_SELLER_INFO);
+  const [sellerSaving, setSellerSaving] = useState(false);
+  const [sellerMessage, setSellerMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [sellerProfileCompletedAt, setSellerProfileCompletedAt] = useState<string | null>(null);
 
   // Stripe Connect
   const [stripeStatus, setStripeStatus] = useState<StripeAccountStatus>("none");
@@ -38,18 +66,9 @@ export default function ProfilEdit() {
   const stripeToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stripeRefreshHandledRef = useRef(false);
 
-  // KYC
+  // KYC (badge facultatif "Vendeur vérifié Quicklot")
   const [kycStatus, setKycStatus] = useState<string | null>(null);
   const [kycNoteAdmin, setKycNoteAdmin] = useState<string | null>(null);
-  const [kycForm, setKycForm] = useState({
-    bio: "",
-    nom_entreprise: "",
-    numero_entreprise: "",
-    adresse: "",
-    code_postal: "",
-    ville_kyc: "",
-    pays: "France",
-  });
   const [kycFile, setKycFile] = useState<File | null>(null);
   const [kycIdFile, setKycIdFile] = useState<File | null>(null);
   const [kycSubmitting, setKycSubmitting] = useState(false);
@@ -67,23 +86,41 @@ export default function ProfilEdit() {
 
         const { data: profileData } = await supabase
           .from("users")
-          .select("pseudo, bio, ville, avatar_url, kyc_status, stripe_account_status")
+          .select(`pseudo, avatar_url, ${SELLER_PROFILE_COLUMNS}`)
           .eq("id", user.id)
           .single();
 
         if (profileData) {
+          const p = profileData as {
+            pseudo?: string | null;
+            avatar_url?: string | null;
+            bio?: string | null;
+            nom_entreprise?: string | null;
+            numero_entreprise?: string | null;
+            adresse?: string | null;
+            code_postal?: string | null;
+            ville?: string | null;
+            pays?: string | null;
+            seller_profile_completed_at?: string | null;
+            kyc_status?: string | null;
+            stripe_account_status?: string | null;
+          };
           setProfile({
-            pseudo: (profileData as { pseudo?: string | null }).pseudo ?? "",
-            bio: (profileData as { bio?: string | null }).bio ?? "",
-            ville: (profileData as { ville?: string | null }).ville ?? "",
-            avatar_url: (profileData as { avatar_url?: string | null }).avatar_url ?? null,
+            pseudo: p.pseudo ?? "",
+            avatar_url: p.avatar_url ?? null,
           });
-          setKycStatus((profileData as { kyc_status?: string | null }).kyc_status ?? null);
-          setKycForm((f) => ({
-            ...f,
-            bio: (profileData as { bio?: string | null }).bio ?? "",
-          }));
-          const rawStripe = (profileData as { stripe_account_status?: string | null }).stripe_account_status ?? null;
+          setSellerInfo({
+            bio: p.bio ?? "",
+            nom_entreprise: p.nom_entreprise ?? "",
+            numero_entreprise: p.numero_entreprise ?? "",
+            adresse: p.adresse ?? "",
+            code_postal: p.code_postal ?? "",
+            ville: p.ville ?? "",
+            pays: p.pays ?? "France",
+          });
+          setSellerProfileCompletedAt(p.seller_profile_completed_at ?? null);
+          setKycStatus(p.kyc_status ?? null);
+          const rawStripe = p.stripe_account_status ?? null;
           const resolvedStripe: StripeAccountStatus =
             rawStripe === "active" || rawStripe === "pending" ? rawStripe : "none";
           setStripeStatus(resolvedStripe);
@@ -91,32 +128,12 @@ export default function ProfilEdit() {
 
         const { data: kycReq } = await supabase
           .from("kyc_requests")
-          .select("statut, note_admin, nom_entreprise, numero_entreprise, adresse, code_postal, ville_kyc, pays")
+          .select("statut, note_admin")
           .eq("user_id", user.id)
           .maybeSingle();
         if (kycReq) {
-          const r = kycReq as {
-            note_admin?: string | null;
-            statut?: string;
-            nom_entreprise?: string | null;
-            numero_entreprise?: string | null;
-            adresse?: string | null;
-            code_postal?: string | null;
-            ville_kyc?: string | null;
-            pays?: string | null;
-          };
+          const r = kycReq as { note_admin?: string | null; statut?: string };
           setKycNoteAdmin(r.note_admin ?? null);
-          if (r.statut === "rejected") {
-            setKycForm((f) => ({
-              ...f,
-              nom_entreprise: r.nom_entreprise ?? "",
-              numero_entreprise: r.numero_entreprise ?? "",
-              adresse: r.adresse ?? "",
-              code_postal: r.code_postal ?? "",
-              ville_kyc: r.ville_kyc ?? "",
-              pays: r.pays ?? "France",
-            }));
-          }
         }
       } finally {
         setLoading(false);
@@ -213,8 +230,6 @@ export default function ProfilEdit() {
   }
 
   function handleStripeConnect() {
-    // Pour un nouveau compte → demander le pays. Pour un compte existant
-    // (pending/active) → Stripe retourne directement le bon lien, pas besoin.
     if (stripeStatus === "none") {
       setStripeCountry("");
       setStripeCountryModal(true);
@@ -246,7 +261,6 @@ export default function ProfilEdit() {
       const url = new URL(window.location.href);
       url.searchParams.delete("stripe");
       window.history.replaceState({}, "", url.toString());
-      // Compte déjà existant côté Stripe — lien de rafraîchissement sans re-demander le pays.
       void runStripeConnect();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -301,22 +315,87 @@ export default function ProfilEdit() {
     setProfileSaving(false);
   }
 
+  async function handleSaveSellerInfo() {
+    if (!userId) return;
+    setSellerMessage(null);
+
+    const trimmed: SellerInfo = {
+      bio: sellerInfo.bio.trim(),
+      nom_entreprise: sellerInfo.nom_entreprise.trim(),
+      numero_entreprise: sellerInfo.numero_entreprise.trim(),
+      adresse: sellerInfo.adresse.trim(),
+      code_postal: sellerInfo.code_postal.trim(),
+      ville: sellerInfo.ville.trim(),
+      pays: sellerInfo.pays.trim() || "France",
+    };
+
+    if (!trimmed.bio) {
+      setSellerMessage({ text: "Veuillez renseigner la description de votre activité.", error: true });
+      return;
+    }
+    if (!trimmed.nom_entreprise || !trimmed.numero_entreprise) {
+      setSellerMessage({ text: "Veuillez remplir le nom et le numéro d'entreprise.", error: true });
+      return;
+    }
+    if (!trimmed.adresse || !trimmed.code_postal || !trimmed.ville) {
+      setSellerMessage({ text: "Veuillez remplir l'adresse, le code postal et la ville.", error: true });
+      return;
+    }
+
+    setSellerSaving(true);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setSellerMessage({ text: "Session expirée. Veuillez vous reconnecter.", error: true });
+      setSellerSaving(false);
+      return;
+    }
+
+    const res = await fetch("/api/seller-profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(trimmed),
+    });
+
+    if (!res.ok) {
+      const errData = (await res.json().catch(() => ({}))) as { error?: string };
+      setSellerMessage({
+        text: errData.error ?? "Erreur lors de la sauvegarde.",
+        error: true,
+      });
+      setSellerSaving(false);
+      return;
+    }
+
+    const data = (await res.json().catch(() => ({}))) as {
+      seller_profile_completed_at?: string | null;
+    };
+    setSellerInfo(trimmed);
+    if (data.seller_profile_completed_at) {
+      setSellerProfileCompletedAt(data.seller_profile_completed_at);
+    }
+    setSellerMessage({ text: "Informations vendeur sauvegardées !", error: false });
+    setSellerSaving(false);
+  }
+
   async function handleKycSubmit() {
     if (!userId) return;
-    if (!kycForm.bio.trim()) {
-      setKycMessage({ text: "Veuillez renseigner la description de votre activité.", error: true });
+
+    if (!hasAllRequiredSellerFields(sellerInfo)) {
+      setKycMessage({
+        text: "Remplissez et sauvegardez d'abord vos informations vendeur ci-dessus.",
+        error: true,
+      });
       return;
     }
-    if (!kycForm.ville_kyc.trim()) {
-      setKycMessage({ text: "Veuillez renseigner votre ville.", error: true });
-      return;
-    }
-    if (!kycForm.nom_entreprise.trim() || !kycForm.numero_entreprise.trim()) {
-      setKycMessage({ text: "Veuillez remplir le nom et le numéro d'entreprise.", error: true });
-      return;
-    }
-    if (!kycForm.adresse.trim() || !kycForm.code_postal.trim() || !kycForm.ville_kyc.trim()) {
-      setKycMessage({ text: "Veuillez remplir l'adresse, le code postal et la ville.", error: true });
+    if (!sellerProfileCompletedAt) {
+      setKycMessage({
+        text: "Sauvegardez vos informations vendeur avant d'envoyer la demande de vérification.",
+        error: true,
+      });
       return;
     }
     if (!kycFile) {
@@ -386,33 +465,27 @@ export default function ProfilEdit() {
         Authorization: `Bearer ${kycSession.access_token}`,
       },
       body: JSON.stringify({
-        nom_entreprise: kycForm.nom_entreprise.trim(),
-        numero_entreprise: kycForm.numero_entreprise.trim(),
-        adresse: kycForm.adresse.trim(),
-        code_postal: kycForm.code_postal.trim(),
-        ville_kyc: kycForm.ville_kyc.trim(),
-        pays: kycForm.pays.trim() || "France",
-        bio: kycForm.bio.trim(),
-        pseudo: kycForm.nom_entreprise.trim() && !profile.pseudo ? kycForm.nom_entreprise.trim() : undefined,
+        nom_entreprise: sellerInfo.nom_entreprise.trim(),
+        numero_entreprise: sellerInfo.numero_entreprise.trim(),
+        adresse: sellerInfo.adresse.trim(),
+        code_postal: sellerInfo.code_postal.trim(),
+        ville_kyc: sellerInfo.ville.trim(),
+        pays: sellerInfo.pays.trim() || "France",
+        bio: sellerInfo.bio.trim(),
       }),
     });
 
     if (!submitRes.ok) {
       const errData = await submitRes.json().catch(() => ({}));
-      setKycMessage({ text: (errData as { error?: string }).error ?? "Erreur lors de la soumission.", error: true });
+      setKycMessage({
+        text: (errData as { error?: string }).error ?? "Erreur lors de la soumission.",
+        error: true,
+      });
       setKycSubmitting(false);
       return;
     }
 
-    setProfile((prev) => ({
-      ...prev,
-      bio: kycForm.bio.trim(),
-      ville: kycForm.ville_kyc.trim(),
-      ...(kycForm.nom_entreprise.trim() && !profile.pseudo ? { pseudo: kycForm.nom_entreprise.trim() } : {}),
-    }));
-
     setKycStatus("pending");
-
     setKycFile(null);
     setKycIdFile(null);
     setKycMessage({ text: "Demande envoyée ! Elle sera traitée sous 48h.", error: false });
@@ -509,11 +582,10 @@ export default function ProfilEdit() {
         )}
       </div>
 
-      {/* ── Profil ── */}
+      {/* ── Identité publique ── */}
       <section className="mb-10">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Informations publiques</h2>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Identité publique</h2>
         <Card padding="lg">
-          {/* Avatar */}
           <div className="mb-6 flex items-center gap-5">
             {avatarPreview || profile.avatar_url ? (
               <img
@@ -568,11 +640,120 @@ export default function ProfilEdit() {
         </Card>
       </section>
 
-      {/* ── Stripe Connect ── */}
+      {/* ── Informations vendeur (obligatoires, sans documents) ── */}
       <section className="mb-10">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">
+        <h2 className="mb-1 text-lg font-semibold text-gray-900">Informations vendeur</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          Coordonnées de votre activité. Aucun document n&apos;est requis ici — la
+          vérification avec justificatifs est facultative et se fait plus bas.
+        </p>
+        <Card padding="lg">
+          <div className="mb-5 max-w-lg">
+            <Textarea
+              id="seller_bio"
+              label="Description de votre activité *"
+              maxLength={300}
+              rows={4}
+              value={sellerInfo.bio}
+              onChange={(e) => setSellerInfo((s) => ({ ...s, bio: e.target.value }))}
+              placeholder="Décrivez votre activité, vos types de produits, votre zone géographique…"
+              helperText={`${300 - sellerInfo.bio.length} caractères restants`}
+            />
+          </div>
+          <div className="mb-5 max-w-md">
+            <Input
+              id="seller_nom_entreprise"
+              label="Nom de l'entreprise *"
+              type="text"
+              value={sellerInfo.nom_entreprise}
+              onChange={(e) => setSellerInfo((s) => ({ ...s, nom_entreprise: e.target.value }))}
+              placeholder="Ma Société SARL"
+            />
+          </div>
+          <div className="mb-5 max-w-md">
+            <Input
+              id="seller_numero_entreprise"
+              label="Numéro d'entreprise (SIRET / TVA / RCS) *"
+              type="text"
+              value={sellerInfo.numero_entreprise}
+              onChange={(e) => setSellerInfo((s) => ({ ...s, numero_entreprise: e.target.value }))}
+              placeholder="123 456 789 00012"
+            />
+          </div>
+          <div className="mb-5 max-w-md">
+            <Input
+              id="seller_adresse"
+              label="Adresse *"
+              type="text"
+              value={sellerInfo.adresse}
+              onChange={(e) => setSellerInfo((s) => ({ ...s, adresse: e.target.value }))}
+              placeholder="12 rue de la République"
+            />
+          </div>
+          <div className="mb-5 flex max-w-md flex-wrap gap-3">
+            <div className="w-32">
+              <Input
+                id="seller_code_postal"
+                label="Code postal *"
+                type="text"
+                maxLength={10}
+                value={sellerInfo.code_postal}
+                onChange={(e) => setSellerInfo((s) => ({ ...s, code_postal: e.target.value }))}
+                placeholder="69000"
+              />
+            </div>
+            <div className="min-w-[180px] flex-1">
+              <Input
+                id="seller_ville"
+                label="Ville *"
+                type="text"
+                value={sellerInfo.ville}
+                onChange={(e) => setSellerInfo((s) => ({ ...s, ville: e.target.value }))}
+                placeholder="Lyon"
+              />
+            </div>
+          </div>
+          <div className="mb-6 max-w-md">
+            <Input
+              id="seller_pays"
+              label="Pays *"
+              type="text"
+              value={sellerInfo.pays}
+              onChange={(e) => setSellerInfo((s) => ({ ...s, pays: e.target.value }))}
+              placeholder="France"
+            />
+          </div>
+
+          {sellerMessage && (
+            <div
+              className={`mb-4 max-w-md rounded-lg border px-4 py-2.5 text-sm ${
+                sellerMessage.error
+                  ? "border-red-300 bg-red-50 text-red-600"
+                  : "border-green-300 bg-green-50 text-green-700"
+              }`}
+            >
+              {sellerMessage.text}
+            </div>
+          )}
+
+          <Button
+            variant="primary"
+            loading={sellerSaving}
+            onClick={handleSaveSellerInfo}
+          >
+            {sellerSaving ? "Sauvegarde…" : "Sauvegarder mes informations"}
+          </Button>
+        </Card>
+      </section>
+
+      {/* ── Stripe Connect (requis pour vendre) ── */}
+      <section className="mb-10">
+        <h2 className="mb-1 text-lg font-semibold text-gray-900">
           Compte bancaire &amp; reversements
         </h2>
+        <p className="mb-4 text-sm text-gray-500">
+          Indispensable pour encaisser vos ventes sur Quicklot.
+        </p>
         <Card padding="lg">
           {stripeToast && (
             <div
@@ -708,9 +889,16 @@ export default function ProfilEdit() {
         </Card>
       </section>
 
-      {/* ── KYC ── */}
+      {/* ── Badge "Vendeur vérifié Quicklot" (facultatif) ── */}
       <section className="mb-10">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Vérification du profil</h2>
+        <h2 className="mb-1 text-lg font-semibold text-gray-900">
+          Badge Vendeur vérifié Quicklot{" "}
+          <span className="text-sm font-normal text-gray-500">(facultatif)</span>
+        </h2>
+        <p className="mb-4 text-sm text-gray-500">
+          Faites vérifier votre activité par notre équipe pour rassurer les
+          acheteurs et afficher un badge sur votre profil.
+        </p>
         <Card padding="lg">
           {kycStatus === "verified" ? (
             <div>
@@ -720,16 +908,16 @@ export default function ProfilEdit() {
                   Votre entreprise a été vérifiée par l&apos;équipe Quicklot.
                 </p>
               </div>
-              {profile.bio && (
+              {sellerInfo.bio && (
                 <div className="mb-3">
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Description</p>
-                  <p className="m-0 max-w-lg whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{profile.bio}</p>
+                  <p className="m-0 max-w-lg whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{sellerInfo.bio}</p>
                 </div>
               )}
-              {profile.ville && (
+              {sellerInfo.ville && (
                 <div>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Ville</p>
-                  <p className="m-0 text-sm text-gray-700">{profile.ville}</p>
+                  <p className="m-0 text-sm text-gray-700">{sellerInfo.ville}</p>
                 </div>
               )}
             </div>
@@ -745,9 +933,11 @@ export default function ProfilEdit() {
           ) : (
             <>
               <p className="mb-5 text-sm text-gray-500">
-                Faites vérifier votre entreprise pour obtenir le badge{" "}
+                Joignez un justificatif d&apos;activité et une pièce d&apos;identité
+                pour obtenir le badge{" "}
                 <Badge variant="warning" size="sm" className="bg-[#FF7D07] text-white">✓ Vendeur vérifié</Badge>
-                {" "}sur votre profil et rassurer les acheteurs.
+                {" "}sur votre profil. Vos informations vendeur (renseignées ci-dessus)
+                sont reprises automatiquement.
               </p>
 
               {kycStatus === "rejected" && kycNoteAdmin && (
@@ -756,82 +946,6 @@ export default function ProfilEdit() {
                   <p className="m-0">{kycNoteAdmin}</p>
                 </div>
               )}
-
-              <div className="mb-5 max-w-lg">
-                <Textarea
-                  id="kyc_bio"
-                  label="Description de votre activité *"
-                  maxLength={300}
-                  rows={4}
-                  value={kycForm.bio}
-                  onChange={(e) => setKycForm((f) => ({ ...f, bio: e.target.value }))}
-                  placeholder="Décrivez votre activité, vos types de produits, votre zone géographique…"
-                  helperText={`${300 - kycForm.bio.length} caractères restants`}
-                />
-              </div>
-              <div className="mb-5 max-w-md">
-                <Input
-                  id="nom_entreprise"
-                  label="Nom de l'entreprise"
-                  type="text"
-                  value={kycForm.nom_entreprise}
-                  onChange={(e) => setKycForm((f) => ({ ...f, nom_entreprise: e.target.value }))}
-                  placeholder="Ma Société SARL"
-                />
-              </div>
-              <div className="mb-5 max-w-md">
-                <Input
-                  id="numero_entreprise"
-                  label="Numéro d'entreprise (SIRET / TVA / RCS)"
-                  type="text"
-                  value={kycForm.numero_entreprise}
-                  onChange={(e) => setKycForm((f) => ({ ...f, numero_entreprise: e.target.value }))}
-                  placeholder="123 456 789 00012"
-                />
-              </div>
-              <div className="mb-5 max-w-md">
-                <Input
-                  id="kyc_adresse"
-                  label="Adresse"
-                  type="text"
-                  value={kycForm.adresse}
-                  onChange={(e) => setKycForm((f) => ({ ...f, adresse: e.target.value }))}
-                  placeholder="12 rue de la République"
-                />
-              </div>
-              <div className="mb-5 flex max-w-md flex-wrap gap-3">
-                <div className="w-32">
-                  <Input
-                    id="kyc_code_postal"
-                    label="Code postal"
-                    type="text"
-                    maxLength={10}
-                    value={kycForm.code_postal}
-                    onChange={(e) => setKycForm((f) => ({ ...f, code_postal: e.target.value }))}
-                    placeholder="69000"
-                  />
-                </div>
-                <div className="min-w-[180px] flex-1">
-                  <Input
-                    id="kyc_ville"
-                    label="Ville"
-                    type="text"
-                    value={kycForm.ville_kyc}
-                    onChange={(e) => setKycForm((f) => ({ ...f, ville_kyc: e.target.value }))}
-                    placeholder="Lyon"
-                  />
-                </div>
-              </div>
-              <div className="mb-6 max-w-md">
-                <Input
-                  id="kyc_pays"
-                  label="Pays"
-                  type="text"
-                  value={kycForm.pays}
-                  onChange={(e) => setKycForm((f) => ({ ...f, pays: e.target.value }))}
-                  placeholder="France"
-                />
-              </div>
 
               <div className="mb-5">
                 <p className="mb-1.5 text-sm font-medium text-gray-600">

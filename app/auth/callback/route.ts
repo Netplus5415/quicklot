@@ -4,6 +4,11 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { addToMarketingList } from "@/lib/brevo-contacts";
 import { sanitizeAttribution } from "@/lib/attribution";
+import {
+  isSellerProfileComplete,
+  SELLER_PROFILE_COLUMNS,
+  type SellerProfileShape,
+} from "@/lib/seller-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +85,7 @@ export async function GET(request: NextRequest) {
       "[auth/callback] users lookup error — skipping insert and welcome flag:",
       existingErr
     );
-    return NextResponse.redirect(`${origin}/dashboard`);
+    return NextResponse.redirect(`${origin}/dashboard/profil`);
   }
 
   const marketingOptIn = sellerProfile?.marketing_opt_in === true;
@@ -169,5 +174,16 @@ export async function GET(request: NextRequest) {
   if (consentNotYetAnswered) {
     return NextResponse.redirect(`${origin}/bienvenue`);
   }
-  return NextResponse.redirect(`${origin}/dashboard`);
+
+  // Pas de /dashboard par défaut : si le profil vendeur n'est pas complet,
+  // on envoie vers /dashboard/profil pour finir l'onboarding, sinon vers /.
+  const { data: sellerRow } = await supabaseAdmin
+    .from("users")
+    .select(SELLER_PROFILE_COLUMNS)
+    .eq("id", user.id)
+    .maybeSingle();
+  const target = isSellerProfileComplete(sellerRow as SellerProfileShape | null)
+    ? `${origin}/`
+    : `${origin}/dashboard/profil`;
+  return NextResponse.redirect(target);
 }
