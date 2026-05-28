@@ -3,7 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { addToMarketingList } from "@/lib/brevo-contacts";
-import { sanitizeAttribution } from "@/lib/attribution";
+import {
+  ATTRIBUTION_COOKIE_NAME,
+  parseAttributionCookie,
+  sanitizeAttribution,
+} from "@/lib/attribution";
 import {
   isSellerProfileComplete,
   SELLER_PROFILE_COLUMNS,
@@ -140,8 +144,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const attribution = sanitizeAttribution(meta.attribution);
+  // Cookie fallback applies only when this callback created the app user.
+  // Otherwise a returning user visiting a UTM link before logging in would
+  // get falsely attributed.
+  const cookieAttribution = existing
+    ? null
+    : parseAttributionCookie(cookieStore.get(ATTRIBUTION_COOKIE_NAME)?.value);
+  const attribution = sanitizeAttribution(meta.attribution) ?? cookieAttribution;
   if (attribution) {
+    // First-touch semantics: ignore on conflict so returning OAuth logins
+    // don't overwrite the original signup attribution.
     const { error: attributionError } = await supabaseAdmin
       .from("user_attributions")
       .upsert(
@@ -150,7 +162,7 @@ export async function GET(request: NextRequest) {
           email: user.email ?? null,
           ...attribution,
         },
-        { onConflict: "user_id" }
+        { onConflict: "user_id", ignoreDuplicates: true }
       );
 
     if (attributionError) {

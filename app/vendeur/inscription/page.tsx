@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { track, trackCustom } from "@/lib/meta-pixel";
-import { readStoredAttribution } from "@/lib/attribution";
+import { persistAttribution, readStoredAttribution } from "@/lib/attribution";
 
 export default function InscriptionVendeur() {
   const [form, setForm] = useState({
@@ -28,6 +28,15 @@ export default function InscriptionVendeur() {
   async function handleGoogleSignIn() {
     setMessage(null);
     setGoogleLoading(true);
+    // Supabase OAuth has no user_metadata channel; refresh the attribution
+    // cookie so /auth/callback can pick it up after the Google redirect.
+    // Never let a storage/cookie failure block sign-in.
+    try {
+      const stored = readStoredAttribution();
+      if (stored) persistAttribution(stored);
+    } catch {
+      // ignore — attribution is best-effort
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: "https://www.quicklot.fr/auth/callback" },
@@ -185,7 +194,7 @@ export default function InscriptionVendeur() {
             marginBottom: "1.5rem",
           }}
         >
-          ← Retour à l'accueil
+          ← Retour à l&apos;accueil
         </Link>
 
         <h1

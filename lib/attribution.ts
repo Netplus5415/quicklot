@@ -72,6 +72,21 @@ export function sanitizeAttribution(input: unknown): AttributionData | null {
   return Object.keys(cleaned).length > 0 ? cleaned : null;
 }
 
+export function parseAttributionCookie(raw: string | undefined | null): AttributionData | null {
+  if (!raw) return null;
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(decodeURIComponent(raw));
+  } catch {
+    try {
+      candidate = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return sanitizeAttribution(candidate);
+}
+
 export function readStoredAttribution(): AttributionData | null {
   if (typeof window === "undefined") return null;
   try {
