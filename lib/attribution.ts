@@ -121,6 +121,18 @@ export function buildAttributionFromLocation(
   return attribution;
 }
 
+export function mergeAttributionFirstTouch(
+  current: AttributionData,
+  stored: AttributionData | null
+): AttributionData {
+  if (!stored) return current;
+  return {
+    ...current,
+    ...stored,
+    last_seen_at: current.last_seen_at ?? stored.last_seen_at,
+  };
+}
+
 export function persistAttribution(attribution: AttributionData) {
   if (typeof window === "undefined") return;
   const sanitized = sanitizeAttribution(attribution);

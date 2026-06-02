@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
             email,
             ...attribution,
           },
-          { onConflict: "user_id" }
+          { onConflict: "user_id", ignoreDuplicates: true }
         );
 
       if (attributionError) {

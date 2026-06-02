@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 
   const { data: existing, error: existingErr } = await supabaseAdmin
     .from("users")
-    .select("id, prenom, pseudo, avatar_url, nom_entreprise, type_vendeur, marketing_opt_in_at, marketing_unsubscribed_at")
+    .select("id, role, prenom, pseudo, avatar_url, nom_entreprise, type_vendeur, marketing_opt_in_at, marketing_unsubscribed_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -175,6 +175,13 @@ export async function GET(request: NextRequest) {
     if (!brevoRes.ok) {
       console.error("[auth/callback] brevo sync failed:", brevoRes.error);
     }
+  }
+
+  if (existing?.role === "admin") {
+    return NextResponse.redirect(`${origin}/admin`);
+  }
+  if (existing?.role === "buyer") {
+    return NextResponse.redirect(`${origin}/dashboard/acheteur`);
   }
 
   const consentNotYetAnswered =

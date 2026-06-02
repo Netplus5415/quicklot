@@ -4,7 +4,31 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { track, trackCustom } from "@/lib/meta-pixel";
-import { persistAttribution, readStoredAttribution } from "@/lib/attribution";
+import {
+  buildAttributionFromLocation,
+  mergeAttributionFirstTouch,
+  persistAttribution,
+  readStoredAttribution,
+  type AttributionData,
+} from "@/lib/attribution";
+
+function captureAttribution(): AttributionData | null {
+  try {
+    const current = buildAttributionFromLocation(window.location, document.referrer);
+    const stored = readStoredAttribution();
+    const merged = current ? mergeAttributionFirstTouch(current, stored) : stored;
+    if (merged) {
+      try {
+        persistAttribution(merged);
+      } catch {
+        // ignore — persistence is best-effort
+      }
+    }
+    return merged;
+  } catch {
+    return null;
+  }
+}
 
 export default function InscriptionVendeur() {
   const [form, setForm] = useState({
@@ -31,12 +55,7 @@ export default function InscriptionVendeur() {
     // Supabase OAuth has no user_metadata channel; refresh the attribution
     // cookie so /auth/callback can pick it up after the Google redirect.
     // Never let a storage/cookie failure block sign-in.
-    try {
-      const stored = readStoredAttribution();
-      if (stored) persistAttribution(stored);
-    } catch {
-      // ignore — attribution is best-effort
-    }
+    captureAttribution();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: "https://www.quicklot.fr/auth/callback" },
@@ -73,7 +92,7 @@ export default function InscriptionVendeur() {
 
     const nomEntreprise = form.nom_entreprise.trim();
     const prenomTrim = form.prenom.trim();
-    const attribution = readStoredAttribution();
+    const attribution = captureAttribution();
     const sellerProfile = {
       prenom: prenomTrim,
       pseudo: nomEntreprise || prenomTrim,
