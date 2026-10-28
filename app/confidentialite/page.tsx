@@ -69,9 +69,11 @@ export default function Confidentialite() {
             Finalités
           </h2>
           <p style={{ margin: "0 0 1rem 0" }}>
-            Création et gestion du compte, vérification d'identité KYC,
+            Création et gestion du compte, vérification d&apos;identité KYC,
             traitement des commandes, communications transactionnelles,
-            amélioration de la plateforme.
+            amélioration de la plateforme. Lorsque vous y consentez,
+            Quicklot peut également vous envoyer des conseils, nouveautés et
+            opportunités de lots par email.
           </p>
 
           <h2
@@ -86,7 +88,8 @@ export default function Confidentialite() {
           </h2>
           <p style={{ margin: "0 0 1rem 0" }}>
             Exécution du contrat, obligation légale pour le KYC, intérêt
-            légitime pour la sécurité de la plateforme.
+            légitime pour la sécurité de la plateforme, consentement pour les
+            communications marketing par email.
           </p>
 
           <h2
@@ -103,7 +106,8 @@ export default function Confidentialite() {
             Supabase (hébergement des données, États-Unis, couvert par les
             clauses contractuelles types UE), Stripe (paiements, Irlande),
             Vercel (hébergement, États-Unis, couvert par les clauses
-            contractuelles types UE), Brevo (emails transactionnels, France).
+            contractuelles types UE), Brevo (emails transactionnels et, si
+            vous y consentez, emails marketing, France).
           </p>
 
           <h2

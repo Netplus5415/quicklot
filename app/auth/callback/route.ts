@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { addToMarketingList } from "@/lib/brevo-contacts";
+import {
+  ATTRIBUTION_COOKIE_NAME,
+  parseAttributionCookie,
+  sanitizeAttribution,
+} from "@/lib/attribution";
+import {
+  isSellerProfileComplete,
+  SELLER_PROFILE_COLUMNS,
+  type SellerProfileShape,
+} from "@/lib/seller-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -51,15 +62,25 @@ export async function GET(request: NextRequest) {
     name?: string | null;
     avatar_url?: string | null;
     picture?: string | null;
+    prenom?: string | null;
+    seller_profile?: {
+      prenom?: string | null;
+      pseudo?: string | null;
+      nom_entreprise?: string | null;
+      type_vendeur?: "amazon" | "destockeur" | null;
+      marketing_opt_in?: boolean | null;
+    } | null;
+    attribution?: unknown;
   };
+  const sellerProfile = meta.seller_profile ?? null;
   const prenom =
-    meta.given_name ?? meta.full_name ?? meta.name ?? null;
+    sellerProfile?.prenom ?? meta.prenom ?? meta.given_name ?? meta.full_name ?? meta.name ?? null;
   const avatar_url = meta.avatar_url ?? meta.picture ?? null;
-  const pseudo = null;
+  const pseudo = sellerProfile?.pseudo ?? null;
 
   const { data: existing, error: existingErr } = await supabaseAdmin
     .from("users")
-    .select("id, pseudo, avatar_url")
+    .select("id, role, prenom, pseudo, avatar_url, nom_entreprise, type_vendeur, marketing_opt_in_at, marketing_unsubscribed_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -68,12 +89,13 @@ export async function GET(request: NextRequest) {
       "[auth/callback] users lookup error — skipping insert and welcome flag:",
       existingErr
     );
-    return NextResponse.redirect(`${origin}/dashboard`);
+    return NextResponse.redirect(`${origin}/dashboard/profil`);
   }
 
-  const isNewUser = !existing;
+  const marketingOptIn = sellerProfile?.marketing_opt_in === true;
+  const marketingOptInAt = marketingOptIn ? new Date().toISOString() : null;
 
-  if (isNewUser) {
+  if (!existing) {
     const { error: insertErr } = await supabaseAdmin.from("users").insert({
       id: user.id,
       email: user.email,
@@ -83,14 +105,34 @@ export async function GET(request: NextRequest) {
       role: "seller",
       kyc_status: null,
       stripe_account_status: "none",
+      nom_entreprise: sellerProfile?.nom_entreprise ?? null,
+      type_vendeur: sellerProfile?.type_vendeur ?? null,
+      marketing_opt_in: marketingOptIn,
+      marketing_opt_in_at: marketingOptInAt,
     });
 
     if (insertErr) {
       console.error("[auth/callback] profile insert error:", insertErr);
     }
   } else {
-    const updates: Record<string, string> = {};
+    const updates: Record<string, string | boolean | null> = {};
+    if (!existing.prenom && prenom) updates.prenom = prenom;
+    if (!existing.pseudo && pseudo) updates.pseudo = pseudo;
     if (!existing.avatar_url && avatar_url) updates.avatar_url = avatar_url;
+    if (!existing.nom_entreprise && sellerProfile?.nom_entreprise) {
+      updates.nom_entreprise = sellerProfile.nom_entreprise;
+    }
+    if (!existing.type_vendeur && sellerProfile?.type_vendeur) {
+      updates.type_vendeur = sellerProfile.type_vendeur;
+    }
+    if (
+      marketingOptIn &&
+      existing.marketing_opt_in_at === null &&
+      existing.marketing_unsubscribed_at === null
+    ) {
+      updates.marketing_opt_in = true;
+      updates.marketing_opt_in_at = marketingOptInAt;
+    }
     if (Object.keys(updates).length > 0) {
       const { error: patchErr } = await supabaseAdmin
         .from("users")
@@ -102,7 +144,65 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const redirectUrl = new URL(`${origin}/dashboard`);
-  if (isNewUser) redirectUrl.searchParams.set("welcome", "1");
-  return NextResponse.redirect(redirectUrl);
+  // Cookie fallback applies only when this callback created the app user.
+  // Otherwise a returning user visiting a UTM link before logging in would
+  // get falsely attributed.
+  const cookieAttribution = existing
+    ? null
+    : parseAttributionCookie(cookieStore.get(ATTRIBUTION_COOKIE_NAME)?.value);
+  const attribution = sanitizeAttribution(meta.attribution) ?? cookieAttribution;
+  if (attribution) {
+    // First-touch semantics: ignore on conflict so returning OAuth logins
+    // don't overwrite the original signup attribution.
+    const { error: attributionError } = await supabaseAdmin
+      .from("user_attributions")
+      .upsert(
+        {
+          user_id: user.id,
+          email: user.email ?? null,
+          ...attribution,
+        },
+        { onConflict: "user_id", ignoreDuplicates: true }
+      );
+
+    if (attributionError) {
+      console.error("[auth/callback] attribution upsert error:", attributionError);
+    }
+  }
+
+  if (marketingOptIn && user.email) {
+    const brevoRes = await addToMarketingList(user.email, prenom ?? "");
+    if (!brevoRes.ok) {
+      console.error("[auth/callback] brevo sync failed:", brevoRes.error);
+    }
+  }
+
+  if (existing?.role === "admin") {
+    return NextResponse.redirect(`${origin}/admin`);
+  }
+  if (existing?.role === "buyer") {
+    return NextResponse.redirect(`${origin}/dashboard/acheteur`);
+  }
+
+  const consentNotYetAnswered =
+    !marketingOptIn &&
+    (!existing ||
+      (existing.marketing_opt_in_at === null &&
+        existing.marketing_unsubscribed_at === null));
+
+  if (consentNotYetAnswered) {
+    return NextResponse.redirect(`${origin}/bienvenue`);
+  }
+
+  // Pas de /dashboard par défaut : si le profil vendeur n'est pas complet,
+  // on envoie vers /dashboard/profil pour finir l'onboarding, sinon vers /.
+  const { data: sellerRow } = await supabaseAdmin
+    .from("users")
+    .select(SELLER_PROFILE_COLUMNS)
+    .eq("id", user.id)
+    .maybeSingle();
+  const target = isSellerProfileComplete(sellerRow as SellerProfileShape | null)
+    ? `${origin}/`
+    : `${origin}/dashboard/profil`;
+  return NextResponse.redirect(target);
 }
