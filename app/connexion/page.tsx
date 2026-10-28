@@ -4,6 +4,11 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import {
+  isSellerProfileComplete,
+  SELLER_PROFILE_COLUMNS,
+  type SellerProfileShape,
+} from "@/lib/seller-profile";
 
 function ConnexionContent() {
   const router = useRouter();
@@ -53,12 +58,28 @@ function ConnexionContent() {
       return;
     }
 
-    // Redirection post-connexion : ?redirect=… ou dashboard par défaut
-    // On valide que redirect est un chemin interne (commence par /) pour éviter les open redirects
-    const safeRedirect = redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
-      ? redirectTo
-      : "/dashboard";
-    router.push(safeRedirect);
+    // Redirection post-connexion :
+    // 1) ?redirect=… interne explicite → priorité absolue
+    // 2) sinon : profil vendeur incomplet → /dashboard/profil
+    // 3) sinon : accueil /
+    // On valide que redirect est un chemin interne pour éviter les open redirects.
+    if (redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")) {
+      router.push(redirectTo);
+      return;
+    }
+
+    let target = "/";
+    if (data.user?.id) {
+      const { data: profileRow } = await supabase
+        .from("users")
+        .select(SELLER_PROFILE_COLUMNS)
+        .eq("id", data.user.id)
+        .maybeSingle();
+      if (!isSellerProfileComplete(profileRow as SellerProfileShape | null)) {
+        target = "/dashboard/profil";
+      }
+    }
+    router.push(target);
   }
 
   const inputStyle: React.CSSProperties = {

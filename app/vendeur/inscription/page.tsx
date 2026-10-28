@@ -4,6 +4,31 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { track, trackCustom } from "@/lib/meta-pixel";
+import {
+  buildAttributionFromLocation,
+  mergeAttributionFirstTouch,
+  persistAttribution,
+  readStoredAttribution,
+  type AttributionData,
+} from "@/lib/attribution";
+
+function captureAttribution(): AttributionData | null {
+  try {
+    const current = buildAttributionFromLocation(window.location, document.referrer);
+    const stored = readStoredAttribution();
+    const merged = current ? mergeAttributionFirstTouch(current, stored) : stored;
+    if (merged) {
+      try {
+        persistAttribution(merged);
+      } catch {
+        // ignore — persistence is best-effort
+      }
+    }
+    return merged;
+  } catch {
+    return null;
+  }
+}
 
 export default function InscriptionVendeur() {
   const [form, setForm] = useState({
@@ -12,6 +37,7 @@ export default function InscriptionVendeur() {
     motDePasse: "",
     confirmation: "",
     nom_entreprise: "",
+    marketing_opt_in: false,
   });
   const [typeVendeur, setTypeVendeur] = useState<"amazon" | "destockeur" | "">("");
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
@@ -19,12 +45,17 @@ export default function InscriptionVendeur() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setForm({ ...form, [e.target.name]: value });
   }
 
   async function handleGoogleSignIn() {
     setMessage(null);
     setGoogleLoading(true);
+    // Supabase OAuth has no user_metadata channel; refresh the attribution
+    // cookie so /auth/callback can pick it up after the Google redirect.
+    // Never let a storage/cookie failure block sign-in.
+    captureAttribution();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: "https://www.quicklot.fr/auth/callback" },
@@ -59,11 +90,27 @@ export default function InscriptionVendeur() {
 
     setLoading(true);
 
+    const nomEntreprise = form.nom_entreprise.trim();
+    const prenomTrim = form.prenom.trim();
+    const attribution = captureAttribution();
+    const sellerProfile = {
+      prenom: prenomTrim,
+      pseudo: nomEntreprise || prenomTrim,
+      nom_entreprise: nomEntreprise,
+      type_vendeur: typeVendeur,
+      marketing_opt_in: form.marketing_opt_in,
+    };
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: form.email,
       password: form.motDePasse,
       options: {
-        data: { prenom: form.prenom },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: {
+          prenom: prenomTrim,
+          seller_profile: sellerProfile,
+          attribution,
+        },
       },
     });
 
@@ -74,34 +121,32 @@ export default function InscriptionVendeur() {
     }
 
     if (signUpData?.user) {
-      const nomEntreprise = form.nom_entreprise.trim();
-      const prenomTrim = form.prenom.trim();
       const apiPayload = {
         userId: signUpData.user.id,
-        prenom: prenomTrim,
-        pseudo: nomEntreprise || prenomTrim,
-        nom_entreprise: nomEntreprise,
-        type_vendeur: typeVendeur,
+        ...sellerProfile,
+        attribution,
       };
 
       try {
         const { data: { session: newSession } } = await supabase.auth.getSession();
-        const res = await fetch("/api/users/setup", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(newSession?.access_token ? { Authorization: `Bearer ${newSession.access_token}` } : {}),
-          },
-          body: JSON.stringify(apiPayload),
-        });
-        const result = await res.json();
-        if (!res.ok) {
-          setMessage({
-            text: `Compte auth créé mais profil vendeur non enregistré : ${result.error ?? "erreur inconnue"}. Contactez le support.`,
-            error: true,
+        if (newSession?.access_token) {
+          const res = await fetch("/api/users/setup", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${newSession.access_token}`,
+            },
+            body: JSON.stringify(apiPayload),
           });
-          setLoading(false);
-          return;
+          const result = await res.json();
+          if (!res.ok) {
+            setMessage({
+              text: `Compte auth créé mais profil vendeur non enregistré : ${result.error ?? "erreur inconnue"}. Contactez le support.`,
+              error: true,
+            });
+            setLoading(false);
+            return;
+          }
         }
       } catch {
         setMessage({
@@ -168,7 +213,7 @@ export default function InscriptionVendeur() {
             marginBottom: "1.5rem",
           }}
         >
-          ← Retour à l'accueil
+          ← Retour à l&apos;accueil
         </Link>
 
         <h1
@@ -365,6 +410,40 @@ export default function InscriptionVendeur() {
               })}
             </div>
           </div>
+
+          <label
+            htmlFor="marketing_opt_in"
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.65rem",
+              color: "#4b5563",
+              fontSize: "0.875rem",
+              lineHeight: 1.45,
+              margin: "0 0 1.25rem 0",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              id="marketing_opt_in"
+              name="marketing_opt_in"
+              type="checkbox"
+              checked={form.marketing_opt_in}
+              onChange={handleChange}
+              style={{
+                width: "1rem",
+                height: "1rem",
+                marginTop: "0.1rem",
+                accentColor: "#FF7D07",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            />
+            <span>
+              J&apos;accepte de recevoir les conseils, nouveautés et opportunités
+              de lots par email. Je peux me désinscrire à tout moment.
+            </span>
+          </label>
 
           <button
             type="submit"
