@@ -177,6 +177,16 @@ export default async function ArticlePage({
             margin: 0 0 1.5rem 0;
             padding-left: 1.5rem;
           }
+          .article-body ul {
+            list-style: disc;
+          }
+          .article-body ol {
+            list-style: decimal;
+          }
+          .article-body li::marker {
+            color: #FF7D07;
+            font-weight: 600;
+          }
           .article-body li {
             margin-bottom: 0.6rem;
           }
