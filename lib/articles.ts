@@ -14,6 +14,74 @@ export interface Article {
 
 const ARTICLES: Article[] = [
   {
+    slug: "liquidation-de-stock-entreprise",
+    titre: "Liquidation de stock : définition, étapes et solutions",
+    categorie: "Guide vendeur",
+    extrait:
+      "Liquider un stock d'entreprise sans le brader : les options possibles, comment préparer vos lots, les erreurs à éviter et les règles à connaître.",
+    date: "7 novembre 2026",
+    readTime: "7 min",
+    imageUrl: "https://www.quicklot.fr/blog/liquidation-stock.jpg",
+    imageAlt: "Palettes de cartons prêtes à être vendues en lots dans un entrepôt",
+    ctaLabel: "Vendez sur Quicklot",
+    ctaHref: "/dashboard/listing/nouveau",
+    contenu: `
+<p>Un stock qui ne tourne plus coûte cher : il immobilise votre trésorerie, occupe de la place en entrepôt et perd de la valeur chaque mois. La liquidation de stock consiste à l'écouler rapidement, en acceptant un prix réduit, pour récupérer cette trésorerie. Bien menée, elle rapporte nettement plus qu'un rachat en bloc par le premier soldeur venu.</p>
+
+<h2>Liquidation de stock : de quoi parle-t-on ?</h2>
+<p>Ici, la liquidation de stock désigne la vente accélérée de tout ou partie de vos marchandises, à votre initiative : fin de série, arrêt d'une gamme, changement d'activité, surstock. Elle se distingue de deux situations proches :</p>
+<ul>
+<li><strong>La liquidation judiciaire :</strong> lorsqu'une entreprise est placée en liquidation judiciaire, ce n'est plus elle qui vend. Le liquidateur désigné par le tribunal organise la vente des actifs, souvent aux enchères.</li>
+<li><strong>Le déstockage et le surplus :</strong> ce sont des excédents vendus sans urgence particulière. Nous détaillons les nuances dans l'article <a href="/blog/destockage-liquidation-surplus-differences">Déstockage, liquidation, surplus : quelles différences ?</a></li>
+</ul>
+
+<h2>Les options pour liquider un stock</h2>
+<ul>
+<li><strong>Le rachat en bloc par un soldeur :</strong> c'est la solution la plus rapide, car un seul acheteur reprend tout. C'est aussi la moins rémunératrice : le soldeur prend à sa charge le risque de revente et négocie en conséquence.</li>
+<li><strong>La vente aux enchères :</strong> adaptée au matériel et aux lots hétérogènes, avec un prix final incertain et des frais de vente.</li>
+<li><strong>La vente directe à des revendeurs professionnels :</strong> commerçants, revendeurs en ligne, vendeurs Amazon. Ils achètent pour revendre et raisonnent sur la valeur de revente de chaque produit. C'est souvent là que vous obtiendrez le meilleur prix, à condition de les trouver.</li>
+<li><strong>Le don :</strong> pour ce qui ne trouve pas preneur, le don à une association reste possible et peut ouvrir droit à une réduction d'impôt au titre du mécénat. Vérifiez les conditions avec votre expert-comptable.</li>
+</ul>
+
+<h2>Liquider votre stock sur Quicklot, étape par étape</h2>
+<p>Quicklot est une place de marché réservée aux professionnels : vous y publiez vos lots, et des acheteurs professionnels, notamment des vendeurs Amazon, les achètent en ligne.</p>
+<ol>
+<li><strong>Faites vérifier votre entreprise.</strong> Avant toute publication, une vérification KYC est demandée : nom de l'entreprise, numéro SIRET, TVA ou RCS, pièce d'identité du gérant et adresse. Les acheteurs savent ainsi à qui ils ont affaire.</li>
+<li><strong>Publiez votre lot.</strong> Renseignez le titre, la description, la catégorie, le prix hors taxes, les photos et, si vous les avez, les codes EAN. Indiquez l'état (100 % neuf ou emballage abîmé) et vos options de livraison : enlèvement sur place, livraison en France ou en Belgique, préparation pour Amazon FBA.</li>
+<li><strong>Expédiez la commande.</strong> L'acheteur paie en ligne par Stripe. Vous expédiez ensuite sous 5 jours ouvrés au maximum après la confirmation du paiement.</li>
+<li><strong>Recevez votre paiement.</strong> Quicklot prélève une commission de 7,5 % HT sur le montant de la vente, hors frais de livraison. Le solde vous est reversé par Stripe Connect.</li>
+</ol>
+
+<h2>Comment valoriser un lot avant de le mettre en vente</h2>
+<ul>
+<li><strong>Faites un inventaire précis :</strong> références, quantités, état. Un acheteur paie mieux ce qu'il peut évaluer.</li>
+<li><strong>Ajoutez les codes EAN :</strong> les vendeurs Amazon s'en servent pour retrouver chaque produit et calculer leur marge. Un lot sans EAN est plus long à évaluer, donc moins bien payé.</li>
+<li><strong>Prenez de vraies photos :</strong> le lot entier, puis quelques produits en gros plan, emballage compris.</li>
+<li><strong>Constituez des lots cohérents :</strong> plusieurs lots homogènes, par référence ou par gamme, trouvent plus facilement preneur qu'un lot fourre-tout.</li>
+<li><strong>Fixez un prix réaliste :</strong> partez de la valeur de revente des produits plutôt que de votre prix d'achat. Votre acheteur doit pouvoir dégager une marge.</li>
+</ul>
+
+<h2>Les erreurs fréquentes</h2>
+<ul>
+<li><strong>Attendre trop longtemps :</strong> un produit saisonnier ou une référence remplacée perd de la valeur chaque mois.</li>
+<li><strong>Décrire le lot de façon vague :</strong> un « lot divers » attire peu d'acheteurs et beaucoup de questions.</li>
+<li><strong>Taire les défauts :</strong> un emballage abîmé ou un produit incomplet doit être signalé. Sur Quicklot, le vendeur garantit que son lot est conforme à sa description et à ses photos.</li>
+<li><strong>Détruire ce qui ne se vend pas :</strong> en France, la loi AGEC interdit depuis 2022 de détruire la plupart des invendus non alimentaires neufs. Ils doivent être réemployés, donnés ou recyclés.</li>
+</ul>
+
+<h2>Questions fréquentes</h2>
+<h3>Quelle différence entre liquidation de stock et liquidation judiciaire ?</h3>
+<p>La liquidation de stock est une décision commerciale : vous choisissez de vendre vite une partie de vos marchandises. La liquidation judiciaire est une procédure collective prononcée par un tribunal : c'est alors le liquidateur qui vend les actifs de l'entreprise.</p>
+<h3>Faut-il déclarer une liquidation de stock ?</h3>
+<p>Annoncer au public une vente « en liquidation » en magasin est une vente réglementée en France : elle suppose une déclaration préalable en mairie (article L310-1 du Code de commerce). Pour une vente de lots à d'autres professionnels, faites le point avec votre expert-comptable.</p>
+<h3>Combien coûte la vente d'un lot sur Quicklot ?</h3>
+<p>Quicklot prélève une commission de 7,5 % HT sur le montant de chaque vente, hors frais de livraison. Les prix des lots sont saisis et affichés hors taxes, et la TVA est calculée automatiquement au paiement.</p>
+
+<h2>En résumé</h2>
+<p>Liquider un stock ne veut pas dire le brader. En préparant des lots précis, avec photos et codes EAN, et en les proposant directement à des revendeurs professionnels, vous récupérez votre trésorerie à un meilleur prix qu'en revendant tout en bloc.</p>
+`,
+  },
+  {
     slug: "sourcer-produits-amazon-fba-destockage",
     titre: "Comment sourcer des produits Amazon FBA via le déstockage en gros",
     categorie: "Guide acheteur",
@@ -146,6 +214,7 @@ const ARTICLES: Article[] = [
 
 <h2>La liquidation : une vente sous contrainte</h2>
 <p>La liquidation intervient quand une entreprise doit se séparer de ses stocks rapidement, souvent sous contrainte juridique ou financière. Les cas les plus fréquents sont les liquidations judiciaires (faillites), les fermetures de magasins ou les cessations d'activité.</p>
+<p>Si c'est vous qui devez écouler un stock rapidement, notre guide explique <a href="/blog/liquidation-de-stock-entreprise">comment organiser une liquidation de stock</a> sans la brader.</p>
 <p>Les lots de liquidation peuvent contenir d'excellentes affaires, mais demandent plus de vigilance :</p>
 <ul>
 <li><strong>Avantage :</strong> les prix sont souvent les plus bas du marché, parfois 10 à 20 % du prix catalogue.</li>

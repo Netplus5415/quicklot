@@ -162,6 +162,13 @@ export default async function ArticlePage({
             padding-bottom: 0.5rem;
             border-bottom: 2px solid #f3f4f6;
           }
+          .article-body h3 {
+            color: #111827;
+            font-size: 1.1rem;
+            font-weight: 650;
+            margin: 1.75rem 0 0.5rem 0;
+            line-height: 1.4;
+          }
           .article-body p {
             margin: 0 0 1.25rem 0;
           }
